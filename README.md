@@ -40,9 +40,9 @@ Folder names supported: `SID_username` (default), `username_SID` (FlipFlop) and 
 - **GitHub Actions**: every push builds `AdvancedSID.exe` - open the latest run under the
   *Actions* tab and download the `AdvancedSID` artifact. Pushing a tag like `v0.1.0` attaches
   the EXE to a GitHub release.
-- **Build locally** (needs the .NET 8 SDK): `.\build.ps1` -> `publish\AdvancedSID.exe`
+- **Build locally** (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)): `.\build.ps1` -> `publish\AdvancedSID.exe` (add `-SkipTests` to skip the unit tests)
 
-The EXE is a single self-contained file (~70 MB) - no .NET runtime needed on the machine.
+The EXE is a single self-contained file (~50 MB) - no .NET runtime needed on the machine.
 
 ## Testing with fake data
 

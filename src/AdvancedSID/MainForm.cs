@@ -604,7 +604,7 @@ internal sealed class MainForm : Form
             flags.Add("Disabled");
         }
 
-        var statusCell = cells[usersGrid.Columns["Status"].Index];
+        var statusCell = cells[usersGrid.Columns["Status"]!.Index];
         statusCell.Value = flags.Count == 0 ? "OK" : string.Join(", ", flags);
         if (user.IsLocked)
         {
@@ -620,11 +620,11 @@ internal sealed class MainForm : Form
             statusCell.Style.ForeColor = OkFore;
         }
 
-        cells[usersGrid.Columns["User"].Index].Value = user.UserName;
-        cells[usersGrid.Columns["DisplayName"].Index].Value = user.Directory.DisplayName ?? string.Empty;
-        cells[usersGrid.Columns["Account"].Index].Value = user.Directory.AccountName ?? string.Empty;
+        cells[usersGrid.Columns["User"]!.Index].Value = user.UserName;
+        cells[usersGrid.Columns["DisplayName"]!.Index].Value = user.Directory.DisplayName ?? string.Empty;
+        cells[usersGrid.Columns["Account"]!.Index].Value = user.Directory.AccountName ?? string.Empty;
 
-        var accountCell = cells[usersGrid.Columns["AccountStatus"].Index];
+        var accountCell = cells[usersGrid.Columns["AccountStatus"]!.Index];
         accountCell.Value = CsvExporter.AccountStatus(user);
         accountCell.ToolTipText = DirectoryTooltip(user);
         if (user.IsOrphaned || user.IsDisabled)
@@ -641,10 +641,10 @@ internal sealed class MainForm : Form
             FillLocationCell(cells[columnIndex], user, location);
         }
 
-        cells[usersGrid.Columns["LastModified"].Index].Value = Format.Time(user.LastWriteTime);
-        cells[usersGrid.Columns["LastModified"].Index].ToolTipText = Format.Age(user.LastWriteTime);
-        cells[usersGrid.Columns["Size"].Index].Value = user.TotalDiskSize;
-        cells[usersGrid.Columns["Sid"].Index].Value = user.Sid ?? "(no SID in folder name)";
+        cells[usersGrid.Columns["LastModified"]!.Index].Value = Format.Time(user.LastWriteTime);
+        cells[usersGrid.Columns["LastModified"]!.Index].ToolTipText = Format.Age(user.LastWriteTime);
+        cells[usersGrid.Columns["Size"]!.Index].Value = user.TotalDiskSize;
+        cells[usersGrid.Columns["Sid"]!.Index].Value = user.Sid ?? "(no SID in folder name)";
     }
 
     private static void FillLocationCell(DataGridViewCell cell, UserRecord user, StorageLocation location)
