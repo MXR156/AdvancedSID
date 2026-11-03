@@ -63,7 +63,8 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "AdvancedSID - FSLogix / UPD profile explorer";
+        var version = typeof(MainForm).Assembly.GetName().Version;
+        Text = $"AdvancedSID v{version?.ToString(3)} - FSLogix / UPD profile explorer";
         Width = 1400;
         Height = 860;
         StartPosition = FormStartPosition.CenterScreen;
