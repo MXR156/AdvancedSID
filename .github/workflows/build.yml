@@ -1,20 +1,42 @@
 name: Build
 
+# Builds and tests on every push / PR (the EXE is under the run's "Artifacts").
+# Release builds - the EXE is attached to the GitHub release when:
+#   - a release is published on the website (with a new or existing tag), or
+#   - a tag like v0.2.0 or 0.2.0 is pushed (a release is created if there isn't one), or
+#   - this workflow is run by hand (Actions > Build > Run workflow) with a release tag.
+
 on:
   push:
     branches: ["**"]
-    tags: ["v*"]
+    tags: ["v*", "[0-9]*"]
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing tag/release to build and attach the EXE to (e.g. 0.1.0). Leave empty for a normal build."
+        required: false
+        default: ""
 
 permissions:
   contents: write
+
+concurrency:
+  group: build-${{ inputs.release_tag || github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name || (github.ref_type == 'tag' && github.ref_name) || '' }}
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG || github.ref }}
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -32,8 +54,9 @@ jobs:
           name: AdvancedSID
           path: publish/AdvancedSID.exe
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Attach to release ${{ env.RELEASE_TAG }}
+        if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: publish/AdvancedSID.exe

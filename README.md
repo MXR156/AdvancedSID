@@ -44,9 +44,12 @@ Folder names supported: `SID_username` (default), `username_SID` (FlipFlop) and 
 
 ## Getting the EXE
 
-- **GitHub Actions**: every push builds `AdvancedSID.exe` - open the latest run under the
-  *Actions* tab and download the `AdvancedSID` artifact. Pushing a tag like `v0.1.0` attaches
-  the EXE to a GitHub release.
+- **Releases**: each release on GitHub gets `AdvancedSID.exe` attached automatically (takes ~2 minutes;
+  watch it on the *Actions* tab). Make one either way:
+  - Website: *Releases > Draft a new release*, create a tag such as `v0.2.0`, *Publish release*.
+  - Command line: `git tag v0.2.0` then `git push origin v0.2.0`.
+  - If a release is missing its EXE: *Actions > Build > Run workflow*, enter the release's tag.
+- **Actions**: every push builds the EXE; open a run and download it under *Artifacts*.
 - **Build locally** (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)): `.\build.ps1` -> `publish\AdvancedSID.exe` (add `-SkipTests` to skip the unit tests)
 
 The EXE is a single self-contained file (~50 MB) - no .NET runtime needed on the machine.
