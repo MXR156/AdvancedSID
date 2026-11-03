@@ -8,7 +8,7 @@ which session host** - across Profile, Office (ODFC) and both Cloud Cache locati
 
 ## Features
 
-- **Up to 4 storage locations**, one row per user:
+- **Up to 4 storage locations** (User Profiles, Office Profiles, and their Cloud Cache copies), one row per user:
   - Profile only (1 path)
   - Profile + Office (2 paths)
   - Profile with Cloud Cache (2 paths)
@@ -72,3 +72,9 @@ src/AdvancedSID          WinForms app
 tests/                   unit tests (xUnit)
 tools/                   test data generator
 ```
+
+## Roadmap
+
+- **Lock removal** (not yet implemented). Planned rule: a lock is only removed when the
+  server named in the lock no longer has that user logged on. If the user still has a
+  session there, removal is refused.

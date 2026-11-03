@@ -20,7 +20,7 @@ internal sealed class MainForm : Form
 
     // Configuration controls
     private readonly CheckBox chkOffice = new() { Text = "Office (ODFC) containers enabled", AutoSize = true };
-    private readonly CheckBox chkCloudCache = new() { Text = "Cloud Cache enabled (2 storage locations)", AutoSize = true };
+    private readonly CheckBox chkCloudCache = new() { Text = "Cloud Cache enabled", AutoSize = true };
     private readonly CheckBox chkDirectory = new() { Text = "Look up users in Active Directory", AutoSize = true };
     private readonly Label[] pathLabels = new Label[4];
     private readonly TextBox[] pathBoxes = new TextBox[4];
@@ -117,10 +117,10 @@ internal sealed class MainForm : Form
 
         string[] labels =
         {
-            "Profile containers:",
-            "Office (ODFC) containers:",
-            "Profile - Cloud Cache location 2:",
-            "Office - Cloud Cache location 2:",
+            "User Profiles:",
+            "Office Profiles:",
+            "User Profiles Cloud Cache:",
+            "Office Profiles Cloud Cache:",
         };
         for (var i = 0; i < 4; i++)
         {
@@ -224,26 +224,23 @@ internal sealed class MainForm : Form
             pathLabels[i].Enabled = pathBoxes[i].Enabled = browseButtons[i].Enabled = enabled[i];
         }
 
-        pathLabels[0].Text = chkCloudCache.Checked ? "Profile - Cloud Cache location 1:" : "Profile containers:";
-        pathLabels[1].Text = chkCloudCache.Checked ? "Office - Cloud Cache location 1:" : "Office (ODFC) containers:";
     }
 
     private List<StorageLocation> BuildLocations()
     {
-        var cc = chkCloudCache.Checked;
         var list = new List<StorageLocation>();
-        void Add(int i, string key, ContainerType type, string name)
+        void Add(int i, string key, ContainerType type, string name, string shortName)
         {
             if (pathBoxes[i].Enabled)
             {
-                list.Add(new StorageLocation { Key = key, Name = name, ShortName = name, Type = type, Path = pathBoxes[i].Text.Trim() });
+                list.Add(new StorageLocation { Key = key, Name = name, ShortName = shortName, Type = type, Path = pathBoxes[i].Text.Trim() });
             }
         }
 
-        Add(0, "1-P1", ContainerType.Profile, cc ? "Profile #1" : "Profile");
-        Add(1, "2-O1", ContainerType.Office, cc ? "Office #1" : "Office");
-        Add(2, "3-P2", ContainerType.Profile, "Profile #2");
-        Add(3, "4-O2", ContainerType.Office, "Office #2");
+        Add(0, "1-P1", ContainerType.Profile, "User Profiles", "User Profile");
+        Add(1, "2-O1", ContainerType.Office, "Office Profiles", "Office");
+        Add(2, "3-P2", ContainerType.Profile, "User Profiles Cloud Cache", "User Profile (CC)");
+        Add(3, "4-O2", ContainerType.Office, "Office Profiles Cloud Cache", "Office (CC)");
         return list;
     }
 
