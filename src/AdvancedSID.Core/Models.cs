@@ -163,6 +163,45 @@ public sealed class UserRecord
     public IEnumerable<string> LockServers =>
         Containers.SelectMany(c => c.LockServers).Distinct(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Containers that should be locked but are not. When a user is logged on, every one of
+    /// their containers (Profile, Office, and both Cloud Cache copies) is locked. So if any
+    /// container is locked, a container with a disk and no lock is a mismatch, and usually
+    /// the cause of a logon problem.
+    /// </summary>
+    public IEnumerable<ProfileContainer> UnlockedWhileOthersLocked =>
+        IsLocked ? Containers.Where(c => !c.IsLocked && c.HasDisk) : Enumerable.Empty<ProfileContainer>();
+
+    /// <summary>A description of what is wrong with this user's locks, or null if they are consistent.</summary>
+    public string? LockMismatch
+    {
+        get
+        {
+            if (!IsLocked)
+            {
+                return null;
+            }
+
+            var issues = new List<string>();
+            var unlocked = UnlockedWhileOthersLocked.ToList();
+            if (unlocked.Count > 0)
+            {
+                var locked = Containers.Where(c => c.IsLocked).Select(c => c.Location.Name);
+                issues.Add($"Locked: {string.Join(", ", locked)} - but NOT locked: {string.Join(", ", unlocked.Select(c => c.Location.Name))}");
+            }
+
+            var servers = LockServers.ToList();
+            if (servers.Count > 1)
+            {
+                issues.Add($"Locked by different servers: {string.Join(", ", servers)}");
+            }
+
+            return issues.Count == 0 ? null : string.Join(". ", issues);
+        }
+    }
+
+    public bool HasLockMismatch => LockMismatch is not null;
+
     public DateTime LastWriteTime =>
         Containers.Count == 0 ? DateTime.MinValue : Containers.Max(c => c.LastWriteTime);
 

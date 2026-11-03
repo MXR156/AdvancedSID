@@ -33,17 +33,23 @@ $locations = [ordered]@{
 }
 
 # name, sid, which locations get a lock (by folder name), host holding the lock
+$all = @('Profiles1', 'Office1', 'Profiles2', 'Office2')
 $users = @(
-    @{ Name = 'Lynne.Todd';   Sid = 'S-1-5-21-839522115-583907252-2147053123-448107'; Locks = @('Office1');                Host = 'DCLAVDPRDSH-2' },
-    @{ Name = 'John.Smith';   Sid = 'S-1-5-21-839522115-583907252-2147053123-448201'; Locks = @();                         Host = '' },
-    @{ Name = 'Sarah.Jones';  Sid = 'S-1-5-21-839522115-583907252-2147053123-448202'; Locks = @('Profiles1', 'Profiles2'); Host = 'DCLAVDPRDSH-5' },
-    @{ Name = 'Mark.Wilson';  Sid = 'S-1-5-21-839522115-583907252-2147053123-448203'; Locks = @('Office2');                Host = 'DCLAVDPRDSH-1' },
-    @{ Name = 'Old.Leaver';   Sid = 'S-1-5-21-839522115-583907252-2147053123-401999'; Locks = @();                         Host = '' }
+    # Logged on, healthy: every container locked by the same host.
+    @{ Name = 'Lynne.Todd';   Sid = 'S-1-5-21-839522115-583907252-2147053123-448107'; Locks = $all;                              Host = 'DCLAVDPRDSH-2' },
+    # Logged off: no locks.
+    @{ Name = 'John.Smith';   Sid = 'S-1-5-21-839522115-583907252-2147053123-448201'; Locks = @();                               Host = '' },
+    # MISMATCH: Office locked but the user profile is not (classic logon problem).
+    @{ Name = 'Sarah.Jones';  Sid = 'S-1-5-21-839522115-583907252-2147053123-448202'; Locks = @('Office1');                      Host = 'DCLAVDPRDSH-5' },
+    # MISMATCH: one Cloud Cache copy of the Office container is not locked.
+    @{ Name = 'Mark.Wilson';  Sid = 'S-1-5-21-839522115-583907252-2147053123-448203'; Locks = @('Profiles1', 'Office1', 'Profiles2'); Host = 'DCLAVDPRDSH-1' },
+    # Leaver (orphaned SID), no Office container.
+    @{ Name = 'Old.Leaver';   Sid = 'S-1-5-21-839522115-583907252-2147053123-401999'; Locks = @();                               Host = '' }
 )
 
 if ($IncludeCurrentUser) {
     $me = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-    $users += @{ Name = $env:USERNAME; Sid = $me.User.Value; Locks = @('Profiles1'); Host = $env:COMPUTERNAME }
+    $users += @{ Name = $env:USERNAME; Sid = $me.User.Value; Locks = $all; Host = $env:COMPUTERNAME }
 }
 
 function New-LockFile([string]$Path, [string]$HostName) {

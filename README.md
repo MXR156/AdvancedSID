@@ -8,7 +8,8 @@ which session host** - across Profile, Office (ODFC) and both Cloud Cache locati
 
 ## Features
 
-- **Up to 4 storage locations** (User Profiles, Office Profiles, and their Cloud Cache copies), one row per user:
+- **Up to 4 storage locations** (User Profiles, Office Profiles, and their Cloud Cache copies), one row per user.
+  Only the paths you need are shown:
   - Profile only (1 path)
   - Profile + Office (2 paths)
   - Profile with Cloud Cache (2 paths)
@@ -16,6 +17,11 @@ which session host** - across Profile, Office (ODFC) and both Cloud Cache locati
 - **Lock view** - each location is a column. A locked container shows in red as
   `LOCKED  DCLAVDPRDSH-2`; hover for the full lock details (FQDN, lock file, lock age).
   The server name is read from the `.lock` file (the same text you see in Notepad).
+- **Lock mismatch detection** - when a user is logged on, *all* of their containers are
+  locked. If some are locked and others are not (e.g. the Office container is locked but the
+  User Profile isn't), or they're locked by different servers, the user is flagged
+  **LOCK MISMATCH** in orange and the unlocked container shows `NOT LOCKED (mismatch)`. These
+  usually cause logon problems. Use the "Lock mismatches only" filter to find them.
 - **SID -> user** - uses Windows/LSA to resolve the SID to `DOMAIN\user`, then LDAP for
   display name, enabled/disabled and last logon. SIDs that no longer resolve are flagged
   **Orphaned** (leavers whose profiles can be cleaned up).
@@ -25,9 +31,10 @@ which session host** - across Profile, Office (ODFC) and both Cloud Cache locati
   - Copy user name, SID, account, server name, folder paths
   - Rescan just that user (e.g. after a lock has been cleared)
 - **Files pane** - every file (VHDX, .lock, .meta) for the selected user with size,
-  modified time, age and the server holding the lock.
+  modified time, age and the server holding the lock. Tick **Show lock files only** to hide
+  the VHDX/meta files; containers without a lock still get a row, so a missing lock stands out.
 - **Filter** by user, display name, SID or **server name** (e.g. type a host name to see
-  every profile it has locked). "Locked only" and "Orphaned / disabled only" toggles.
+  every profile it has locked). "Locked only", "Lock mismatches only" and "Orphaned / disabled only" toggles.
 - Status bar shows totals and (on hover) number of locks per session host.
 - **Export CSV** of the current (filtered) list.
 - Remembers your paths in `%APPDATA%\AdvancedSID\settings.json`.

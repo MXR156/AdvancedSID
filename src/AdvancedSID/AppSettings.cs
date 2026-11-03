@@ -19,6 +19,8 @@ internal sealed class AppSettings
 
     public bool DirectoryLookupEnabled { get; set; } = true;
 
+    public bool LockFilesOnly { get; set; }
+
     private static string FilePath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdvancedSID", "settings.json");
 

@@ -13,6 +13,9 @@ internal sealed class MainForm : Form
     private static readonly Color WarnSelectedBack = Color.FromArgb(200, 150, 40);
     private static readonly Color OkFore = Color.FromArgb(0, 110, 0);
     private static readonly Color MutedFore = Color.FromArgb(150, 150, 150);
+    private static readonly Color MismatchBack = Color.FromArgb(255, 160, 60);
+    private static readonly Color MismatchSelectedBack = Color.FromArgb(205, 95, 0);
+    private static readonly Color MismatchFore = Color.Black;
     private static readonly Font BoldFont = new(Control.DefaultFont, FontStyle.Bold);
 
     private readonly AppSettings settings = AppSettings.Load();
@@ -22,6 +25,8 @@ internal sealed class MainForm : Form
     private readonly CheckBox chkOffice = new() { Text = "Office (ODFC) containers enabled", AutoSize = true };
     private readonly CheckBox chkCloudCache = new() { Text = "Cloud Cache enabled", AutoSize = true };
     private readonly CheckBox chkDirectory = new() { Text = "Look up users in Active Directory", AutoSize = true };
+    private readonly Panel configPanel = new() { Dock = DockStyle.Top };
+    private readonly FlowLayoutPanel configOptions = new() { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
     private readonly Label[] pathLabels = new Label[4];
     private readonly TextBox[] pathBoxes = new TextBox[4];
     private readonly Button[] browseButtons = new Button[4];
@@ -33,6 +38,8 @@ internal sealed class MainForm : Form
     private readonly TextBox txtFilter = new() { Width = 260, PlaceholderText = "Filter: user, name, SID, server... (Ctrl+F)" };
     private readonly CheckBox chkLockedOnly = new() { Text = "Locked only", AutoSize = true };
     private readonly CheckBox chkProblemsOnly = new() { Text = "Orphaned / disabled only", AutoSize = true };
+    private readonly CheckBox chkMismatchOnly = new() { Text = "Lock mismatches only", AutoSize = true };
+    private readonly CheckBox chkLockFilesOnly = new() { Text = "Show lock files only", AutoSize = true };
 
     // Results
     private readonly DataGridView usersGrid = CreateGrid();
@@ -98,22 +105,9 @@ internal sealed class MainForm : Form
 
     private void BuildLayout()
     {
-        // --- storage locations
-        var config = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            ColumnCount = 3,
-            Padding = new Padding(4),
-        };
-        config.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        config.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        config.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-        var options = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = true, Margin = new Padding(0, 0, 0, 4) };
-        options.Controls.AddRange(new Control[] { chkOffice, chkCloudCache, chkDirectory });
-        config.Controls.Add(options, 0, 0);
-        config.SetColumnSpan(options, 3);
+        // --- storage locations (laid out by hand in LayoutConfig so hidden rows collapse cleanly)
+        configOptions.Controls.AddRange(new Control[] { chkDirectory, chkOffice, chkCloudCache });
+        configPanel.Controls.Add(configOptions);
 
         string[] labels =
         {
@@ -125,37 +119,39 @@ internal sealed class MainForm : Form
         for (var i = 0; i < 4; i++)
         {
             var index = i;
-            pathLabels[i] = new Label { Text = labels[i], AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 3) };
-            pathBoxes[i] = new TextBox { Dock = DockStyle.Fill, PlaceholderText = @"e.g. N:\AVDProfiles  or  \\server\share\Profiles" };
+            pathLabels[i] = new Label { Text = labels[i], AutoSize = true };
+            pathBoxes[i] = new TextBox { PlaceholderText = @"e.g. N:\AVDProfiles  or  \\server\share\Profiles" };
             browseButtons[i] = new Button { Text = "Browse...", AutoSize = true };
             browseButtons[i].Click += (_, _) => Browse(index);
-            config.Controls.Add(pathLabels[i], 0, i + 1);
-            config.Controls.Add(pathBoxes[i], 1, i + 1);
-            config.Controls.Add(browseButtons[i], 2, i + 1);
+            configPanel.Controls.AddRange(new Control[] { pathLabels[i], pathBoxes[i], browseButtons[i] });
         }
 
-        var configBox = new GroupBox { Text = "Storage locations", Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(6) };
-        configBox.Controls.Add(config);
+        configPanel.Resize += (_, _) => LayoutConfig();
+        var configSeparator = new Label { Dock = DockStyle.Top, Height = 1, BackColor = SystemColors.ControlDark };
 
         // --- toolbar
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(6, 4, 6, 4), WrapContents = false };
         var filterLabel = new Label { Text = "Filter:", AutoSize = true, Margin = new Padding(16, 8, 3, 3) };
         chkLockedOnly.Margin = new Padding(12, 6, 3, 3);
         chkProblemsOnly.Margin = new Padding(6, 6, 3, 3);
+        chkMismatchOnly.Margin = new Padding(6, 6, 3, 3);
         txtFilter.Margin = new Padding(3, 5, 3, 3);
-        toolbar.Controls.AddRange(new Control[] { btnScan, btnCancel, btnExport, filterLabel, txtFilter, chkLockedOnly, chkProblemsOnly });
+        toolbar.Controls.AddRange(new Control[] { btnScan, btnCancel, btnExport, filterLabel, txtFilter, chkLockedOnly, chkMismatchOnly, chkProblemsOnly });
 
         // --- grids
-        var filesHeader = new Label
+        var filesHeader = new Panel { Dock = DockStyle.Top, Height = LogicalToDeviceUnits(26), BackColor = SystemColors.ControlLight };
+        var filesHeaderText = new Label
         {
             Text = "Files for selected user  (hover a lock for details, right-click for options)",
-            Dock = DockStyle.Top,
+            Dock = DockStyle.Fill,
             AutoSize = false,
-            Height = 22,
             TextAlign = ContentAlignment.MiddleLeft,
             Padding = new Padding(6, 0, 0, 0),
-            BackColor = SystemColors.ControlLight,
         };
+        chkLockFilesOnly.Dock = DockStyle.Right;
+        chkLockFilesOnly.Padding = new Padding(0, 0, 10, 0);
+        filesHeader.Controls.Add(filesHeaderText);
+        filesHeader.Controls.Add(chkLockFilesOnly);
         split.Panel1.Controls.Add(usersGrid);
         split.Panel2.Controls.Add(filesGrid);
         split.Panel2.Controls.Add(filesHeader);
@@ -166,7 +162,8 @@ internal sealed class MainForm : Form
         // Dock order: Fill first, outermost last.
         Controls.Add(split);
         Controls.Add(toolbar);
-        Controls.Add(configBox);
+        Controls.Add(configSeparator);
+        Controls.Add(configPanel);
         Controls.Add(status);
 
         BuildFilesColumns();
@@ -202,6 +199,7 @@ internal sealed class MainForm : Form
         chkOffice.Checked = settings.OfficeEnabled;
         chkCloudCache.Checked = settings.CloudCacheEnabled;
         chkDirectory.Checked = settings.DirectoryLookupEnabled;
+        chkLockFilesOnly.Checked = settings.LockFilesOnly;
     }
 
     private void SaveSettingsFromUi()
@@ -213,17 +211,64 @@ internal sealed class MainForm : Form
         settings.OfficeEnabled = chkOffice.Checked;
         settings.CloudCacheEnabled = chkCloudCache.Checked;
         settings.DirectoryLookupEnabled = chkDirectory.Checked;
+        settings.LockFilesOnly = chkLockFilesOnly.Checked;
         settings.Save();
     }
 
+    /// <summary>Which of the 4 path rows are in use, given the Office / Cloud Cache ticks.</summary>
+    private bool[] ActiveRows() =>
+        new[] { true, chkOffice.Checked, chkCloudCache.Checked, chkOffice.Checked && chkCloudCache.Checked };
+
     private void UpdatePathRows()
     {
-        bool[] enabled = { true, chkOffice.Checked, chkCloudCache.Checked, chkOffice.Checked && chkCloudCache.Checked };
+        var active = ActiveRows();
         for (var i = 0; i < 4; i++)
         {
-            pathLabels[i].Enabled = pathBoxes[i].Enabled = browseButtons[i].Enabled = enabled[i];
+            pathLabels[i].Visible = pathBoxes[i].Visible = browseButtons[i].Visible = active[i];
         }
 
+        LayoutConfig();
+    }
+
+    /// <summary>Positions the tick boxes and the visible path rows, and sizes the panel to fit.</summary>
+    private void LayoutConfig()
+    {
+        var margin = LogicalToDeviceUnits(8);
+        var gap = LogicalToDeviceUnits(6);
+        var width = configPanel.ClientSize.Width;
+
+        configOptions.Location = new Point(margin - 3, gap);
+        configOptions.Size = configOptions.PreferredSize;
+        var y = configOptions.Bottom + gap;
+
+        // Size the label column for the widest label (visible or not) so the boxes don't jump about.
+        var labelWidth = pathLabels.Max(l => l.PreferredSize.Width);
+        var active = ActiveRows();
+        for (var i = 0; i < 4; i++)
+        {
+            if (!active[i])
+            {
+                continue;
+            }
+
+            var button = browseButtons[i];
+            var box = pathBoxes[i];
+            var label = pathLabels[i];
+            button.Size = button.PreferredSize;
+            var rowHeight = Math.Max(box.PreferredHeight, button.Height);
+
+            label.Location = new Point(margin, y + ((rowHeight - label.PreferredSize.Height) / 2));
+            button.Location = new Point(Math.Max(0, width - margin - button.Width), y + ((rowHeight - button.Height) / 2));
+            box.Location = new Point(margin + labelWidth + gap, y + ((rowHeight - box.Height) / 2));
+            box.Width = Math.Max(LogicalToDeviceUnits(100), button.Left - gap - box.Left);
+            y += rowHeight + gap;
+        }
+
+        var height = y + (gap / 2);
+        if (configPanel.Height != height)
+        {
+            configPanel.Height = height;
+        }
     }
 
     private List<StorageLocation> BuildLocations()
@@ -231,7 +276,7 @@ internal sealed class MainForm : Form
         var list = new List<StorageLocation>();
         void Add(int i, string key, ContainerType type, string name, string shortName)
         {
-            if (pathBoxes[i].Enabled)
+            if (ActiveRows()[i])
             {
                 list.Add(new StorageLocation { Key = key, Name = name, ShortName = shortName, Type = type, Path = pathBoxes[i].Text.Trim() });
             }
@@ -284,6 +329,8 @@ internal sealed class MainForm : Form
         };
         chkLockedOnly.CheckedChanged += (_, _) => PopulateUsers();
         chkProblemsOnly.CheckedChanged += (_, _) => PopulateUsers();
+        chkMismatchOnly.CheckedChanged += (_, _) => PopulateUsers();
+        chkLockFilesOnly.CheckedChanged += (_, _) => PopulateFiles();
         warningsLabel.Click += (_, _) => ShowWarnings();
 
         usersGrid.SelectionChanged += (_, _) => PopulateFiles();
@@ -310,6 +357,7 @@ internal sealed class MainForm : Form
         };
         filesMenu.Opening += (_, e) => BuildFilesMenu(e);
 
+        Load += (_, _) => LayoutConfig();
         Shown += (_, _) => split.SplitterDistance = (int)(split.Height * 0.62);
         FormClosing += (_, _) => SaveSettingsFromUi();
     }
@@ -529,6 +577,7 @@ internal sealed class MainForm : Form
         var filter = txtFilter.Text.Trim();
         return result.Users.Where(u =>
             (!chkLockedOnly.Checked || u.IsLocked)
+            && (!chkMismatchOnly.Checked || u.HasLockMismatch)
             && (!chkProblemsOnly.Checked || u.IsOrphaned || u.IsDisabled)
             && (filter.Length == 0 || Matches(u, filter)));
     }
@@ -590,7 +639,11 @@ internal sealed class MainForm : Form
         var cells = row.Cells;
 
         var flags = new List<string>();
-        if (user.IsLocked)
+        if (user.HasLockMismatch)
+        {
+            flags.Add("LOCK MISMATCH");
+        }
+        else if (user.IsLocked)
         {
             flags.Add("Locked");
         }
@@ -606,7 +659,13 @@ internal sealed class MainForm : Form
 
         var statusCell = cells[usersGrid.Columns["Status"]!.Index];
         statusCell.Value = flags.Count == 0 ? "OK" : string.Join(", ", flags);
-        if (user.IsLocked)
+        if (user.HasLockMismatch)
+        {
+            StyleCell(statusCell, MismatchBack, MismatchSelectedBack, MismatchFore, bold: true);
+            statusCell.ToolTipText = "Lock mismatch - this will likely cause a logon problem.\n\n" + user.LockMismatch
+                + "\n\nWhen a user is logged on, ALL of their containers are locked.";
+        }
+        else if (user.IsLocked)
         {
             StyleCell(statusCell, LockedBack, LockedSelectedBack, LockedFore, bold: true);
             statusCell.ToolTipText = "Locked by: " + string.Join(", ", user.LockServers);
@@ -692,6 +751,13 @@ internal sealed class MainForm : Form
             var servers = containers.SelectMany(c => c.LockServers).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             cell.Value = "LOCKED  " + string.Join(", ", servers);
             StyleCell(cell, LockedBack, LockedSelectedBack, LockedFore, bold: true);
+        }
+        else if (user.UnlockedWhileOthersLocked.Any(c => containers.Contains(c)))
+        {
+            cell.Value = "NOT LOCKED (mismatch)  " + Format.Size(containers.Sum(c => c.DiskSize));
+            StyleCell(cell, MismatchBack, MismatchSelectedBack, MismatchFore, bold: true);
+            cell.ToolTipText = $"MISMATCH: this container has no lock, but the user's other containers are locked by {string.Join(", ", user.LockServers)}.\n\n"
+                + cell.ToolTipText;
         }
         else if (!containers.Any(c => c.HasDisk))
         {
@@ -783,6 +849,7 @@ internal sealed class MainForm : Form
 
         var users = result.Users;
         var locked = users.Count(u => u.IsLocked);
+        var mismatched = users.Count(u => u.HasLockMismatch);
         var lockFiles = users.Sum(u => u.Containers.Sum(c => c.Locks.Count()));
         var orphaned = users.Count(u => u.IsOrphaned);
         var disabled = users.Count(u => u.IsDisabled);
@@ -793,7 +860,8 @@ internal sealed class MainForm : Form
             .Select(g => $"{g.Key} ({g.Count()})")
             .ToList();
 
-        countsLabel.Text = $"{shown} of {users.Count} users  |  {locked} locked ({lockFiles} lock files)  |  {orphaned} orphaned  |  {disabled} disabled";
+        countsLabel.Text = $"{shown} of {users.Count} users  |  {locked} locked ({lockFiles} lock files)  |  {mismatched} lock mismatches  |  {orphaned} orphaned  |  {disabled} disabled";
+        countsLabel.ForeColor = mismatched > 0 ? MismatchSelectedBack : SystemColors.ControlText;
         countsLabel.ToolTipText = servers.Count == 0 ? "No locks." : "Locks per server:\n" + string.Join("\n", servers);
     }
 
@@ -916,26 +984,34 @@ internal sealed class MainForm : Form
             return;
         }
 
+        var mismatched = user.UnlockedWhileOthersLocked.ToHashSet();
+        var locksOnly = chkLockFilesOnly.Checked;
         foreach (var c in user.Containers)
         {
+            var isMismatch = mismatched.Contains(c);
             if (c.Files.Count == 0)
             {
-                AddFileRow(c, null);
+                AddFileRow(c, null, null, false);
+            }
+            else if (locksOnly && !c.IsLocked)
+            {
+                // Keep a row per container so a missing lock is obvious.
+                AddFileRow(c, null, isMismatch ? "(NO LOCK FILE - but other containers are locked)" : "(no lock file)", isMismatch);
             }
 
-            foreach (var f in c.Files)
+            foreach (var f in c.Files.Where(f => !locksOnly || f.Kind == ProfileFileKind.Lock))
             {
-                AddFileRow(c, f);
+                AddFileRow(c, f, null, isMismatch && f.Kind == ProfileFileKind.Disk);
             }
         }
     }
 
-    private void AddFileRow(ProfileContainer c, ProfileFile? f)
+    private void AddFileRow(ProfileContainer c, ProfileFile? f, string? note, bool mismatch)
     {
         var index = filesGrid.Rows.Add(
             c.Location.Name,
             f?.Kind.ToString() ?? string.Empty,
-            f?.Name ?? (c.ScanError is not null ? "(could not read folder: " + c.ScanError + ")" : "(folder is empty)"),
+            f?.Name ?? note ?? (c.ScanError is not null ? "(could not read folder: " + c.ScanError + ")" : "(folder is empty)"),
             f?.Size ?? 0L,
             f is null ? string.Empty : Format.Time(f.LastWriteTime),
             f is null ? string.Empty : Format.Age(f.LastWriteTime),
@@ -944,7 +1020,17 @@ internal sealed class MainForm : Form
 
         var row = filesGrid.Rows[index];
         row.Tag = new FileRow(c, f);
-        if (f?.Kind == ProfileFileKind.Lock)
+        if (mismatch)
+        {
+            foreach (DataGridViewCell cell in row.Cells)
+            {
+                StyleCell(cell, MismatchBack, MismatchSelectedBack, MismatchFore, bold: false);
+                cell.ToolTipText = "Lock mismatch: this container is NOT locked, but the user's other containers are.";
+            }
+
+            row.Cells["File"].Style.Font = BoldFont;
+        }
+        else if (f?.Kind == ProfileFileKind.Lock)
         {
             foreach (DataGridViewCell cell in row.Cells)
             {

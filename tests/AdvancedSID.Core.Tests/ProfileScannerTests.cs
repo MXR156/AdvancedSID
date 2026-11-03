@@ -78,3 +78,67 @@ public sealed class ProfileScannerTests : IDisposable
     [InlineData("desktop.ini", ProfileFileKind.Other)]
     public void Classifies_files(string name, ProfileFileKind kind) => Assert.Equal(kind, ProfileScanner.Classify(name));
 }
+
+public sealed class LockMismatchTests
+{
+    private static int counter;
+
+    private static ProfileContainer Container(string location, bool disk, string? lockServer)
+    {
+        var loc = new StorageLocation { Key = location, Name = location, ShortName = location, Type = ContainerType.Profile, Path = "x" };
+        var c = new ProfileContainer { Location = loc, FolderPath = "x" + Interlocked.Increment(ref counter), FolderUserName = "u" };
+        if (disk)
+        {
+            c.Files.Add(new ProfileFile { FullPath = "a.vhdx", Kind = ProfileFileKind.Disk });
+        }
+
+        if (lockServer is not null)
+        {
+            c.Files.Add(new ProfileFile { FullPath = "a.vhdx.lock", Kind = ProfileFileKind.Lock, Lock = new LockDetails { Server = lockServer } });
+        }
+
+        return c;
+    }
+
+    private static UserRecord User(params ProfileContainer[] containers)
+    {
+        var u = new UserRecord { Key = "k", UserName = "u" };
+        u.Containers.AddRange(containers);
+        return u;
+    }
+
+    [Fact]
+    public void All_locked_by_same_server_is_fine()
+    {
+        var u = User(Container("User Profiles", true, "H1.x"), Container("Office Profiles", true, "H1.x"));
+        Assert.Null(u.LockMismatch);
+    }
+
+    [Fact]
+    public void Nothing_locked_is_fine()
+    {
+        Assert.Null(User(Container("User Profiles", true, null), Container("Office Profiles", true, null)).LockMismatch);
+    }
+
+    [Fact]
+    public void Office_locked_but_profile_not_is_a_mismatch()
+    {
+        var u = User(Container("User Profiles", true, null), Container("Office Profiles", true, "H1.x"));
+        Assert.True(u.HasLockMismatch);
+        Assert.Contains("NOT locked: User Profiles", u.LockMismatch);
+        Assert.Equal("User Profiles", Assert.Single(u.UnlockedWhileOthersLocked).Location.Name);
+    }
+
+    [Fact]
+    public void Folder_without_a_disk_is_not_a_mismatch()
+    {
+        Assert.Null(User(Container("User Profiles", true, "H1.x"), Container("Office Profiles", false, null)).LockMismatch);
+    }
+
+    [Fact]
+    public void Different_servers_is_a_mismatch()
+    {
+        var u = User(Container("User Profiles", true, "H1.x"), Container("Office Profiles", true, "H2.x"));
+        Assert.Contains("different servers: H1, H2", u.LockMismatch);
+    }
+}
