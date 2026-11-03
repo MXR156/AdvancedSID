@@ -65,7 +65,7 @@ public sealed class LockDetails
     /// <summary>Set when the file could not be read (e.g. held open exclusively).</summary>
     public string? ReadError { get; init; }
 
-    /// <summary>Host name without the DNS suffix, e.g. "DCLAVDPRDSH-2".</summary>
+    /// <summary>Host name without the DNS suffix, e.g. "AVD-HOST-02".</summary>
     public string? ShortServer => Server is null ? null : Server.Split('.')[0];
 }
 

@@ -6,7 +6,7 @@ namespace AdvancedSID.Core.Tests;
 
 public sealed class ProfileScannerTests : IDisposable
 {
-    private const string Sid = "S-1-5-21-839522115-583907252-2147053123-448107";
+    private const string Sid = "S-1-5-21-1111111111-2222222222-3333333333-448107";
     private readonly string root = Path.Combine(Path.GetTempPath(), "advsid-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -39,23 +39,23 @@ public sealed class ProfileScannerTests : IDisposable
         var o1 = Location("2-Office", ContainerType.Office);
         var p2 = Location("3-Profile", ContainerType.Profile);
         var o2 = Location("4-Office", ContainerType.Office);
-        MakeUser(p1, "Profile", "Lynne.Todd", null);
-        MakeUser(o1, "ODFC", "Lynne.Todd", "DCLAVDPRDSH-2.dcl.co.uk");
-        MakeUser(p2, "Profile", "Lynne.Todd", null);
-        MakeUser(o2, "ODFC", "Lynne.Todd", null);
+        MakeUser(p1, "Profile", "Jane.Doe", null);
+        MakeUser(o1, "ODFC", "Jane.Doe", "AVD-HOST-02.contoso.local");
+        MakeUser(p2, "Profile", "Jane.Doe", null);
+        MakeUser(o2, "ODFC", "Jane.Doe", null);
         Directory.CreateDirectory(Path.Combine(p1.Path, "S-1-5-21-1-2-3-1001_Other.User"));
 
         var result = new ProfileScanner().Scan(new[] { p1, o1, p2, o2 });
 
         Assert.Empty(result.Errors);
         Assert.Equal(2, result.Users.Count);
-        var lynne = result.Users.Single(u => u.Sid == Sid);
-        Assert.Equal("Lynne.Todd", lynne.UserName);
-        Assert.Equal(4, lynne.Containers.Count);
-        Assert.True(lynne.IsLocked);
-        var locked = Assert.Single(lynne.Containers, c => c.IsLocked);
+        var jane = result.Users.Single(u => u.Sid == Sid);
+        Assert.Equal("Jane.Doe", jane.UserName);
+        Assert.Equal(4, jane.Containers.Count);
+        Assert.True(jane.IsLocked);
+        var locked = Assert.Single(jane.Containers, c => c.IsLocked);
         Assert.Same(o1, locked.Location);
-        Assert.Equal(new[] { "DCLAVDPRDSH-2" }, locked.LockServers);
+        Assert.Equal(new[] { "AVD-HOST-02" }, locked.LockServers);
         Assert.Equal(1024, locked.DiskSize);
 
         var other = result.Users.Single(u => u.Sid != Sid);

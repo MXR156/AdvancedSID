@@ -7,14 +7,14 @@ namespace AdvancedSID.Core.Tests;
 public class LockFileParserTests
 {
     // The sample from a real FSLogix lock file, as it shows in Notepad.
-    private const string Sample = "    堬ꃰơ  DCLAVDPRDSH-2.dcl.co.uk" + "                                                                ";
+    private const string Sample = "    堬ꃰơ  AVD-HOST-02.contoso.local" + "                                                                ";
 
     [Fact]
     public void Extracts_server_from_real_world_sample()
     {
         var bytes = Encoding.Unicode.GetBytes(Sample);
         var hosts = LockFileParser.ExtractHostNames(bytes);
-        Assert.Equal("DCLAVDPRDSH-2.dcl.co.uk", hosts[0]);
+        Assert.Equal("AVD-HOST-02.contoso.local", hosts[0]);
     }
 
     [Fact]
@@ -41,8 +41,8 @@ public class LockFileParserTests
             File.WriteAllBytes(path, Encoding.Unicode.GetBytes(Sample));
             var details = LockFileParser.Read(path);
             Assert.Null(details.ReadError);
-            Assert.Equal("DCLAVDPRDSH-2.dcl.co.uk", details.Server);
-            Assert.Equal("DCLAVDPRDSH-2", details.ShortServer);
+            Assert.Equal("AVD-HOST-02.contoso.local", details.Server);
+            Assert.Equal("AVD-HOST-02", details.ShortServer);
         }
         finally
         {

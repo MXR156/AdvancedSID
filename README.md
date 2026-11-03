@@ -1,92 +1,126 @@
-# AdvancedSID
+<p align="center">
+  <img src="src/AdvancedSID/Resources/AdvancedSID.png" alt="AdvancedSID" width="128">
+</p>
 
-A Windows tool for FSLogix (and UPD) admins - like SIDDER, with more features.
+<h1 align="center">AdvancedSID</h1>
 
-Point it at your profile share(s) and it lists every user folder, maps the SID in the
-folder name to the AD account, and shows **at a glance which container is locked and by
-which session host** - across Profile, Office (ODFC) and both Cloud Cache locations at once.
+<p align="center">
+  Find out who owns every FSLogix profile on your share, and see at a glance which containers are locked and by which server.
+</p>
+
+<p align="center">
+  <a href="https://github.com/MXR156/AdvancedSID/releases/latest"><b>Download the latest version</b></a>
+</p>
+
+---
+
+FSLogix and UPD profile shares are full of folders named after SIDs, and a stuck `.lock` file
+can be in any one of up to four places: the User Profile, the Office container, and the Cloud
+Cache copy of each. AdvancedSID scans them all at once and shows one row per user, so you can
+see straight away:
+
+- **who** each profile folder belongs to (name, AD account, enabled / disabled / deleted),
+- **which** of their containers are locked, and **which session host** holds each lock,
+- **which** users have a lock **mismatch**, a common cause of logon failures.
+
+It is read-only: it never changes, moves or deletes anything on your shares.
 
 ## Features
 
-- **Up to 4 storage locations** (User Profiles, Office Profiles, and their Cloud Cache copies), one row per user.
-  Only the paths you need are shown:
-  - Profile only (1 path)
-  - Profile + Office (2 paths)
-  - Profile with Cloud Cache (2 paths)
-  - Profile + Office with Cloud Cache (4 paths)
-- **Lock view** - each location is a column. A locked container shows in red as
-  `LOCKED  DCLAVDPRDSH-2`; hover for the full lock details (FQDN, lock file, lock age).
-  The server name is read from the `.lock` file (the same text you see in Notepad).
-- **Lock mismatch detection** - when a user is logged on, *all* of their containers are
-  locked. If some are locked and others are not (e.g. the Office container is locked but the
-  User Profile isn't), or they're locked by different servers, the user is flagged
-  **LOCK MISMATCH** in orange and the unlocked container shows `NOT LOCKED (mismatch)`. These
-  usually cause logon problems. Use the "Lock mismatches only" filter to find them.
-- **SID -> user** - uses Windows/LSA to resolve the SID to `DOMAIN\user`, then LDAP for
-  display name, enabled/disabled and last logon. SIDs that no longer resolve are flagged
-  **Orphaned** (leavers whose profiles can be cleaned up).
-- **Right-click** a user / cell:
-  - Open the folder for that location in Explorer (or double-click the cell)
-  - Open the lock file in Notepad / show it in Explorer
-  - Copy user name, SID, account, server name, folder paths
-  - Rescan just that user (e.g. after a lock has been cleared)
-- **Files pane** - every file (VHDX, .lock, .meta) for the selected user with size,
-  modified time, age and the server holding the lock. Tick **Show lock files only** to hide
-  the VHDX/meta files; containers without a lock still get a row, so a missing lock stands out.
-- **Filter** by user, display name, SID or **server name** (e.g. type a host name to see
-  every profile it has locked). "Locked only", "Lock mismatches only" and "Orphaned / disabled only" toggles.
-- Status bar shows totals and (on hover) number of locks per session host.
-- **Export CSV** of the current (filtered) list.
-- Locations are set up in a **Configure locations...** window (opens automatically the first
-  time), so the main window stays clean. A one-line summary of the configured paths sits under
-  the toolbar - click it or the button to change them. Saved in `%APPDATA%\AdvancedSID\settings.json`.
-- Read-only: it never modifies or opens the VHDX files. (Lock removal is planned for a later version.)
+**Lock overview**
+- Every storage location is a column. A locked container shows in red with the server
+  holding it, for example `LOCKED  AVD-HOST-02`. Hover over it for the full server name,
+  the lock file and how long it has been locked.
+- The server name is read straight from the FSLogix `.lock` file, so there's no need to open
+  each one in Notepad.
 
-Folder names supported: `SID_username` (default), `username_SID` (FlipFlop) and UPD `UVHD-SID.vhdx`.
+**Lock mismatch detection**
+- When a user is logged on, *all* of their containers are locked. If some are locked and
+  others aren't (for example, Office locked but User Profile not), or they're locked by
+  different servers, the user is flagged **LOCK MISMATCH** in orange. The container that
+  should be locked shows `NOT LOCKED (mismatch)`.
 
-## Getting the EXE
+**User lookup**
+- Each SID is resolved to the Active Directory account, with display name, email,
+  enabled/disabled status and approximate last logon.
+- SIDs that no longer exist in AD are flagged **Orphaned**, which makes leavers' profiles easy to find.
 
-- **Releases**: each release on GitHub gets `AdvancedSID.exe` attached automatically (takes ~2 minutes;
-  watch it on the *Actions* tab). Make one either way:
-  - Website: *Releases > Draft a new release*, create a tag such as `v0.2.0`, *Publish release*.
-  - Command line: `git tag v0.2.0` then `git push origin v0.2.0`.
-  - If a release is missing its EXE: *Actions > Build > Run workflow*, enter the release's tag.
-- **Actions**: every push builds the EXE; open a run and download it under *Artifacts*.
-- **Build locally** (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)): `.\build.ps1` -> `publish\AdvancedSID.exe` (add `-SkipTests` to skip the unit tests)
+**Works with your layout**
+- User Profiles only, User + Office Profiles, either with Cloud Cache, or all four locations.
+- Folder naming `SID_username` (FSLogix default), `username_SID` (FlipFlop) and UPD `UVHD-SID.vhdx`.
+- Mapped drives or UNC paths (`\\server\share\Profiles`).
 
-The EXE is a single self-contained file (~50 MB) - no .NET runtime needed on the machine.
+**Quick actions** (right-click a user or a location cell)
+- Open the user's folder in Explorer. Double-click a cell does the same.
+- Open a lock file in Notepad, or show it in Explorer.
+- Copy the user name, SID, AD account, server name or folder paths.
+- Rescan just that user, for example after a lock has been cleared.
 
-## Testing with fake data
+**Finding things**
+- Search by user name, display name, SID or **server name**. Type a host name to see every
+  profile that host has locked.
+- Filters: *Locked only*, *Lock mismatches only*, *Orphaned / disabled only*.
+- The files pane lists every VHDX, `.lock` and `.meta` file for the selected user. Tick
+  *Show lock files only* to see just the locks.
+- The status bar shows totals; hover over it for a count of locks per session host.
+- **Export CSV** saves the current list, for reports or follow-up.
 
-```powershell
-.\tools\New-TestProfiles.ps1 -Root C:\FSLogixTest -IncludeCurrentUser
-```
+## Download and run
 
-Then in *Configure locations...* tick *Office* and *Cloud Cache* and set the paths to
-`C:\FSLogixTest\Profiles1`, `Office1`, `Profiles2`, `Office2`.
-`-IncludeCurrentUser` adds a folder with your own SID so you can see an AD lookup succeed;
-the other SIDs are made up so they will show as *Orphaned* on a domain PC.
+1. Download **AdvancedSID.exe** from the [latest release](https://github.com/MXR156/AdvancedSID/releases/latest).
+2. Run it. There's nothing to install, and .NET doesn't need to be installed.
+3. The first time, **Configure locations** opens. Tick the options that match your FSLogix setup
+   and enter the path for each location:
 
-## Notes
+   | Setting                                | Paths to enter                                   |
+   |----------------------------------------|--------------------------------------------------|
+   | (nothing ticked)                       | User Profiles                                    |
+   | Office containers enabled              | User Profiles, Office Profiles                   |
+   | Cloud Cache enabled                    | User Profiles, User Profiles Cloud Cache         |
+   | Both                                   | All four                                         |
 
-- Mapped drives: if you run the EXE **as administrator**, drives mapped in your normal
-  session are not visible to it - use the UNC path (`\\server\share\...`) instead, or run it
-  without elevation.
-- Lock files can be held open by the session host; if one can't be read it is still shown
-  as locked, with "(unreadable)" as the server.
-- Only the top level of each user folder is examined (where FSLogix puts the VHDX/lock/meta files).
+4. Click **OK**. The scan starts. Press **F5** to rescan at any time, and use
+   **Configure locations...** to change paths later.
 
-## Project layout
+> Windows SmartScreen may warn you the first time, because the EXE isn't code-signed.
+> Click **More info → Run anyway**.
 
-```
-src/AdvancedSID.Core     scanning, lock-file parsing, AD lookup, CSV (no UI)
-src/AdvancedSID          WinForms app
-tests/                   unit tests (xUnit)
-tools/                   test data generator
-```
+## What the colours mean
+
+| Cell                         | Meaning                                                                   |
+|------------------------------|---------------------------------------------------------------------------|
+| `OK  2.1 GB` (green)         | Container present, not locked                                             |
+| `LOCKED  HOST` (red)         | Container locked by that session host                                     |
+| `NOT LOCKED (mismatch)` (orange) | User's other containers are locked but this one isn't, so investigate     |
+| `No disk` (amber)            | The user's folder exists but has no VHD/VHDX in it                        |
+| `-` (grey)                   | The user has no folder in this location                                   |
+
+The **Status** column summarises each user: `OK`, `Locked`, `LOCK MISMATCH`, `Orphaned` or `Disabled`.
+
+## Requirements
+
+- 64-bit Windows 10 / 11 or Windows Server 2016 or later.
+- Read access to the profile shares.
+- For user details: a domain-joined machine. Without a domain, profiles and locks are still
+  shown, but names can't be looked up.
+
+## Tips and troubleshooting
+
+- **Mapped drive "can't be reached":** if you run AdvancedSID *as administrator*, drives
+  mapped in your normal session aren't visible to it. Run it normally, or use the UNC path
+  (`\\server\share\...`).
+- **"(unreadable)" as the lock server:** the session host has the lock file open
+  exclusively. The container is still shown as locked.
+- **Everyone shows as Orphaned on a test PC:** the PC isn't in the same domain as the SIDs.
+- Your locations are saved in `%APPDATA%\AdvancedSID\settings.json`.
 
 ## Roadmap
 
-- **Lock removal** (not yet implemented). Planned rule: a lock is only removed when the
-  server named in the lock no longer has that user logged on. If the user still has a
-  session there, removal is refused.
+- **Clear stuck locks** from within the app. A lock will only be removed when the user is no
+  longer logged on to the server named in it.
+
+Suggestions and bug reports are welcome. Please [open an issue](https://github.com/MXR156/AdvancedSID/issues).
+
+---
+
+Building from source or making a release? See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

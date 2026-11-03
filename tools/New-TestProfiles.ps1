@@ -36,15 +36,15 @@ $locations = [ordered]@{
 $all = @('Profiles1', 'Office1', 'Profiles2', 'Office2')
 $users = @(
     # Logged on, healthy: every container locked by the same host.
-    @{ Name = 'Lynne.Todd';   Sid = 'S-1-5-21-839522115-583907252-2147053123-448107'; Locks = $all;                              Host = 'DCLAVDPRDSH-2' },
+    @{ Name = 'Jane.Doe';   Sid = 'S-1-5-21-1111111111-2222222222-3333333333-448107'; Locks = $all;                              Host = 'AVD-HOST-02' },
     # Logged off: no locks.
-    @{ Name = 'John.Smith';   Sid = 'S-1-5-21-839522115-583907252-2147053123-448201'; Locks = @();                               Host = '' },
+    @{ Name = 'John.Smith';   Sid = 'S-1-5-21-1111111111-2222222222-3333333333-448201'; Locks = @();                               Host = '' },
     # MISMATCH: Office locked but the user profile is not (classic logon problem).
-    @{ Name = 'Sarah.Jones';  Sid = 'S-1-5-21-839522115-583907252-2147053123-448202'; Locks = @('Office1');                      Host = 'DCLAVDPRDSH-5' },
+    @{ Name = 'Sarah.Jones';  Sid = 'S-1-5-21-1111111111-2222222222-3333333333-448202'; Locks = @('Office1');                      Host = 'AVD-HOST-05' },
     # MISMATCH: one Cloud Cache copy of the Office container is not locked.
-    @{ Name = 'Mark.Wilson';  Sid = 'S-1-5-21-839522115-583907252-2147053123-448203'; Locks = @('Profiles1', 'Office1', 'Profiles2'); Host = 'DCLAVDPRDSH-1' },
+    @{ Name = 'Mark.Wilson';  Sid = 'S-1-5-21-1111111111-2222222222-3333333333-448203'; Locks = @('Profiles1', 'Office1', 'Profiles2'); Host = 'AVD-HOST-01' },
     # Leaver (orphaned SID), no Office container.
-    @{ Name = 'Old.Leaver';   Sid = 'S-1-5-21-839522115-583907252-2147053123-401999'; Locks = @();                               Host = '' }
+    @{ Name = 'Old.Leaver';   Sid = 'S-1-5-21-1111111111-2222222222-3333333333-401999'; Locks = @();                               Host = '' }
 )
 
 if ($IncludeCurrentUser) {
@@ -81,7 +81,7 @@ foreach ($loc in $locations.Keys) {
 }
 
 # A folder with no disk at all, to show the "No disk" state.
-New-Item -ItemType Directory -Path (Join-Path $Root 'Profiles1\S-1-5-21-839522115-583907252-2147053123-448300_Empty.User') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $Root 'Profiles1\S-1-5-21-1111111111-2222222222-3333333333-448300_Empty.User') -Force | Out-Null
 
 Write-Host "Test data created under $Root" -ForegroundColor Green
 $locations.Keys | ForEach-Object { Write-Host "  $(Join-Path $Root $_)" }

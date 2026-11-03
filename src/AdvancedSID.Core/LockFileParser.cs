@@ -6,7 +6,7 @@ namespace AdvancedSID.Core;
 /// <summary>
 /// Reads FSLogix *.lock files. The format is undocumented binary, but the name of the
 /// machine that holds the lock is stored as UTF-16 text (it shows up when the file is
-/// opened in Notepad), e.g. "    堬ꃰơ  DCLAVDPRDSH-2.dcl.co.uk     ".
+/// opened in Notepad), e.g. "    堬ꃰơ  AVD-HOST-02.contoso.local     ".
 /// </summary>
 public static partial class LockFileParser
 {
