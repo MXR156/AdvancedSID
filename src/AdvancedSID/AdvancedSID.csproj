@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
+    <AssemblyName>AdvancedSID</AssemblyName>
+    <RootNamespace>AdvancedSID</RootNamespace>
+    <Product>AdvancedSID</Product>
+    <Description>FSLogix / UPD profile share browser - maps SIDs to users and shows container locks.</Description>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <!-- Single, self-contained EXE when published (see build.ps1 / GitHub Actions). -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdvancedSID.Core\AdvancedSID.Core.csproj" />
+  </ItemGroup>
+
+</Project>
