@@ -37,7 +37,9 @@ which session host** - across Profile, Office (ODFC) and both Cloud Cache locati
   every profile it has locked). "Locked only", "Lock mismatches only" and "Orphaned / disabled only" toggles.
 - Status bar shows totals and (on hover) number of locks per session host.
 - **Export CSV** of the current (filtered) list.
-- Remembers your paths in `%APPDATA%\AdvancedSID\settings.json`.
+- Locations are set up in a **Configure locations...** window (opens automatically the first
+  time), so the main window stays clean. A one-line summary of the configured paths sits under
+  the toolbar - click it or the button to change them. Saved in `%APPDATA%\AdvancedSID\settings.json`.
 - Read-only: it never modifies or opens the VHDX files. (Lock removal is planned for a later version.)
 
 Folder names supported: `SID_username` (default), `username_SID` (FlipFlop) and UPD `UVHD-SID.vhdx`.
@@ -60,7 +62,7 @@ The EXE is a single self-contained file (~50 MB) - no .NET runtime needed on the
 .\tools\New-TestProfiles.ps1 -Root C:\FSLogixTest -IncludeCurrentUser
 ```
 
-Then tick *Office* and *Cloud Cache* and set the paths to
+Then in *Configure locations...* tick *Office* and *Cloud Cache* and set the paths to
 `C:\FSLogixTest\Profiles1`, `Office1`, `Profiles2`, `Office2`.
 `-IncludeCurrentUser` adds a folder with your own SID so you can see an AD lookup succeed;
 the other SIDs are made up so they will show as *Orphaned* on a domain PC.

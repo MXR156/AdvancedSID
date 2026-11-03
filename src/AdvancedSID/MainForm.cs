@@ -22,14 +22,9 @@ internal sealed class MainForm : Form
     private readonly DirectoryLookup directory = new();
 
     // Configuration controls
-    private readonly CheckBox chkOffice = new() { Text = "Office (ODFC) containers enabled", AutoSize = true };
-    private readonly CheckBox chkCloudCache = new() { Text = "Cloud Cache enabled", AutoSize = true };
-    private readonly CheckBox chkDirectory = new() { Text = "Look up users in Active Directory", AutoSize = true };
-    private readonly Panel configPanel = new() { Dock = DockStyle.Top };
-    private readonly FlowLayoutPanel configOptions = new() { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-    private readonly Label[] pathLabels = new Label[4];
-    private readonly TextBox[] pathBoxes = new TextBox[4];
-    private readonly Button[] browseButtons = new Button[4];
+    private readonly Button btnLocations = new() { Text = "Configure locations...", AutoSize = true };
+    private readonly Label locationsSummary = new() { Dock = DockStyle.Top, AutoSize = false, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, ForeColor = SystemColors.GrayText };
+    private readonly ToolTip summaryTip = new();
 
     // Toolbar
     private readonly Button btnScan = new() { Text = "Scan  (F5)", AutoSize = true };
@@ -80,7 +75,7 @@ internal sealed class MainForm : Form
         BuildLayout();
         LoadSettingsIntoUi();
         WireEvents();
-        UpdatePathRows();
+        UpdateLocationsSummary();
     }
 
     // ------------------------------------------------------------------ layout
@@ -113,30 +108,6 @@ internal sealed class MainForm : Form
 
     private void BuildLayout()
     {
-        // --- storage locations (laid out by hand in LayoutConfig so hidden rows collapse cleanly)
-        configOptions.Controls.AddRange(new Control[] { chkDirectory, chkOffice, chkCloudCache });
-        configPanel.Controls.Add(configOptions);
-
-        string[] labels =
-        {
-            "User Profiles:",
-            "Office Profiles:",
-            "User Profiles Cloud Cache:",
-            "Office Profiles Cloud Cache:",
-        };
-        for (var i = 0; i < 4; i++)
-        {
-            var index = i;
-            pathLabels[i] = new Label { Text = labels[i], AutoSize = true };
-            pathBoxes[i] = new TextBox { PlaceholderText = @"e.g. N:\AVDProfiles  or  \\server\share\Profiles" };
-            browseButtons[i] = new Button { Text = "Browse...", AutoSize = true };
-            browseButtons[i].Click += (_, _) => Browse(index);
-            configPanel.Controls.AddRange(new Control[] { pathLabels[i], pathBoxes[i], browseButtons[i] });
-        }
-
-        configPanel.Resize += (_, _) => LayoutConfig();
-        var configSeparator = new Label { Dock = DockStyle.Top, Height = 1, BackColor = SystemColors.ControlDark };
-
         // --- toolbar
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(6, 4, 6, 4), WrapContents = false };
         var filterLabel = new Label { Text = "Filter:", AutoSize = true, Margin = new Padding(16, 8, 3, 3) };
@@ -144,7 +115,8 @@ internal sealed class MainForm : Form
         chkProblemsOnly.Margin = new Padding(6, 6, 3, 3);
         chkMismatchOnly.Margin = new Padding(6, 6, 3, 3);
         txtFilter.Margin = new Padding(3, 5, 3, 3);
-        toolbar.Controls.AddRange(new Control[] { btnScan, btnCancel, btnExport, filterLabel, txtFilter, chkLockedOnly, chkMismatchOnly, chkProblemsOnly });
+        btnLocations.Margin = new Padding(3, 3, 12, 3);
+        toolbar.Controls.AddRange(new Control[] { btnLocations, btnScan, btnCancel, btnExport, filterLabel, txtFilter, chkLockedOnly, chkMismatchOnly, chkProblemsOnly });
 
         // --- grids
         var filesHeader = new Panel { Dock = DockStyle.Top, Height = LogicalToDeviceUnits(26), BackColor = SystemColors.ControlLight };
@@ -169,9 +141,10 @@ internal sealed class MainForm : Form
 
         // Dock order: Fill first, outermost last.
         Controls.Add(split);
+        locationsSummary.Height = LogicalToDeviceUnits(20);
+        locationsSummary.Padding = new Padding(LogicalToDeviceUnits(10), 0, LogicalToDeviceUnits(10), LogicalToDeviceUnits(2));
+        Controls.Add(locationsSummary);
         Controls.Add(toolbar);
-        Controls.Add(configSeparator);
-        Controls.Add(configPanel);
         Controls.Add(status);
 
         BuildFilesColumns();
@@ -200,128 +173,57 @@ internal sealed class MainForm : Form
 
     private void LoadSettingsIntoUi()
     {
-        pathBoxes[0].Text = settings.ProfilePath1;
-        pathBoxes[1].Text = settings.OfficePath1;
-        pathBoxes[2].Text = settings.ProfilePath2;
-        pathBoxes[3].Text = settings.OfficePath2;
-        chkOffice.Checked = settings.OfficeEnabled;
-        chkCloudCache.Checked = settings.CloudCacheEnabled;
-        chkDirectory.Checked = settings.DirectoryLookupEnabled;
         chkLockFilesOnly.Checked = settings.LockFilesOnly;
     }
 
     private void SaveSettingsFromUi()
     {
-        settings.ProfilePath1 = pathBoxes[0].Text.Trim();
-        settings.OfficePath1 = pathBoxes[1].Text.Trim();
-        settings.ProfilePath2 = pathBoxes[2].Text.Trim();
-        settings.OfficePath2 = pathBoxes[3].Text.Trim();
-        settings.OfficeEnabled = chkOffice.Checked;
-        settings.CloudCacheEnabled = chkCloudCache.Checked;
-        settings.DirectoryLookupEnabled = chkDirectory.Checked;
         settings.LockFilesOnly = chkLockFilesOnly.Checked;
         settings.Save();
     }
 
-    /// <summary>Which of the 4 path rows are in use, given the Office / Cloud Cache ticks.</summary>
-    private bool[] ActiveRows() =>
-        new[] { true, chkOffice.Checked, chkCloudCache.Checked, chkOffice.Checked && chkCloudCache.Checked };
-
-    private void UpdatePathRows()
+    /// <summary>Opens the Configure locations window; returns true if the settings were changed.</summary>
+    private bool ConfigureLocations()
     {
-        var active = ActiveRows();
-        for (var i = 0; i < 4; i++)
+        var before = System.Text.Json.JsonSerializer.Serialize(settings);
+        using var dialog = new LocationsDialog(settings) { Icon = Icon };
+        if (dialog.ShowDialog(this) != DialogResult.OK)
         {
-            pathLabels[i].Visible = pathBoxes[i].Visible = browseButtons[i].Visible = active[i];
+            return false;
         }
 
-        LayoutConfig();
+        UpdateLocationsSummary();
+        return before != System.Text.Json.JsonSerializer.Serialize(settings);
     }
 
-    /// <summary>Positions the tick boxes and the visible path rows, and sizes the panel to fit.</summary>
-    private void LayoutConfig()
+    private void UpdateLocationsSummary()
     {
-        var margin = LogicalToDeviceUnits(8);
-        var gap = LogicalToDeviceUnits(6);
-        var width = configPanel.ClientSize.Width;
-
-        configOptions.Location = new Point(margin - 3, gap);
-        configOptions.Size = configOptions.PreferredSize;
-        var y = configOptions.Bottom + gap;
-
-        // Size the label column for the widest label (visible or not) so the boxes don't jump about.
-        var labelWidth = pathLabels.Max(l => l.PreferredSize.Width);
-        var active = ActiveRows();
-        for (var i = 0; i < 4; i++)
+        if (!settings.IsConfigured)
         {
-            if (!active[i])
-            {
-                continue;
-            }
-
-            var button = browseButtons[i];
-            var box = pathBoxes[i];
-            var label = pathLabels[i];
-            button.Size = button.PreferredSize;
-            var rowHeight = Math.Max(box.PreferredHeight, button.Height);
-
-            label.Location = new Point(margin, y + ((rowHeight - label.PreferredSize.Height) / 2));
-            button.Location = new Point(Math.Max(0, width - margin - button.Width), y + ((rowHeight - button.Height) / 2));
-            box.Location = new Point(margin + labelWidth + gap, y + ((rowHeight - box.Height) / 2));
-            box.Width = Math.Max(LogicalToDeviceUnits(100), button.Left - gap - box.Left);
-            y += rowHeight + gap;
+            locationsSummary.Text = "No locations configured yet - click \"Configure locations...\" to add your profile share(s).";
+            summaryTip.SetToolTip(locationsSummary, null);
+            return;
         }
 
-        var height = y + (gap / 2);
-        if (configPanel.Height != height)
-        {
-            configPanel.Height = height;
-        }
-    }
-
-    private List<StorageLocation> BuildLocations()
-    {
-        var list = new List<StorageLocation>();
-        void Add(int i, string key, ContainerType type, string name, string shortName)
-        {
-            if (ActiveRows()[i])
-            {
-                list.Add(new StorageLocation { Key = key, Name = name, ShortName = shortName, Type = type, Path = pathBoxes[i].Text.Trim() });
-            }
-        }
-
-        Add(0, "1-P1", ContainerType.Profile, "User Profiles", "User Profile");
-        Add(1, "2-O1", ContainerType.Office, "Office Profiles", "Office");
-        Add(2, "3-P2", ContainerType.Profile, "User Profiles Cloud Cache", "User Profile (CC)");
-        Add(3, "4-O2", ContainerType.Office, "Office Profiles Cloud Cache", "Office (CC)");
-        return list;
-    }
-
-    private void Browse(int index)
-    {
-        using var dialog = new FolderBrowserDialog
-        {
-            Description = "Select the share / folder that contains the per-user folders",
-            UseDescriptionForTitle = true,
-            ShowNewFolderButton = false,
-        };
-        if (Directory.Exists(pathBoxes[index].Text))
-        {
-            dialog.InitialDirectory = pathBoxes[index].Text;
-        }
-
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-        {
-            pathBoxes[index].Text = dialog.SelectedPath;
-        }
+        var locations = settings.BuildLocations();
+        locationsSummary.Text = string.Join("     ", locations.Select(l => $"{l.ShortName}: {l.Path}"))
+            + (settings.DirectoryLookupEnabled ? "     |  AD lookup on" : "     |  AD lookup off");
+        summaryTip.SetToolTip(locationsSummary, string.Join("\n", locations.Select(l => $"{l.Name}:  {l.Path}")) + "\n\nClick to change.");
     }
 
     // ------------------------------------------------------------------ events
 
     private void WireEvents()
     {
-        chkOffice.CheckedChanged += (_, _) => UpdatePathRows();
-        chkCloudCache.CheckedChanged += (_, _) => UpdatePathRows();
+        btnLocations.Click += async (_, _) =>
+        {
+            if (ConfigureLocations() && btnScan.Enabled)
+            {
+                await ScanAsync();
+            }
+        };
+        locationsSummary.Cursor = Cursors.Hand;
+        locationsSummary.Click += (_, _) => btnLocations.PerformClick();
         btnScan.Click += async (_, _) => await ScanAsync();
         btnCancel.Click += (_, _) => scanCts?.Cancel();
         btnExport.Click += (_, _) => ExportCsv();
@@ -365,8 +267,14 @@ internal sealed class MainForm : Form
         };
         filesMenu.Opening += (_, e) => BuildFilesMenu(e);
 
-        Load += (_, _) => LayoutConfig();
-        Shown += (_, _) => split.SplitterDistance = (int)(split.Height * 0.62);
+        Shown += (_, _) =>
+        {
+            split.SplitterDistance = (int)(split.Height * 0.62);
+            if (!settings.IsConfigured)
+            {
+                btnLocations.PerformClick();
+            }
+        };
         FormClosing += (_, _) => SaveSettingsFromUi();
     }
 
@@ -418,16 +326,19 @@ internal sealed class MainForm : Form
 
     private async Task ScanAsync()
     {
-        var locations = BuildLocations();
-        var missing = locations.Where(l => string.IsNullOrWhiteSpace(l.Path)).ToList();
-        if (missing.Count > 0)
+        if (settings.BuildLocations().Any(l => string.IsNullOrWhiteSpace(l.Path)))
         {
-            MessageBox.Show(this, "Please enter a path for: " + string.Join(", ", missing.Select(m => m.Name)), "AdvancedSID", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ConfigureLocations();
+        }
+
+        var locations = settings.BuildLocations();
+        if (locations.Any(l => string.IsNullOrWhiteSpace(l.Path)))
+        {
             return;
         }
 
         SaveSettingsFromUi();
-        var lookup = chkDirectory.Checked;
+        var lookup = settings.DirectoryLookupEnabled;
         scanCts = new CancellationTokenSource();
         var token = scanCts.Token;
         SetBusy(true);
@@ -508,7 +419,7 @@ internal sealed class MainForm : Form
         }
 
         var locations = result.Locations;
-        var lookup = chkDirectory.Checked;
+        var lookup = settings.DirectoryLookupEnabled;
         statusLabel.Text = $"Rescanning {user.UserName}...";
         var updated = await Task.Run(() =>
         {
