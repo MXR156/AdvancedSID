@@ -68,6 +68,13 @@ internal sealed class MainForm : Form
         Height = 860;
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
+        using (var iconStream = typeof(MainForm).Assembly.GetManifestResourceStream("AdvancedSID.ico"))
+        {
+            if (iconStream is not null)
+            {
+                Icon = new Icon(iconStream);
+            }
+        }
 
         BuildLayout();
         LoadSettingsIntoUi();

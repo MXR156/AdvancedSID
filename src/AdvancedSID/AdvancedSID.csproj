@@ -13,6 +13,7 @@
     <Product>AdvancedSID</Product>
     <Description>FSLogix / UPD profile share browser - maps SIDs to users and shows container locks.</Description>
     <Version>0.1.0</Version>
+    <ApplicationIcon>Resources\AdvancedSID.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- Single, self-contained EXE when published (see build.ps1 / GitHub Actions). -->
@@ -23,6 +24,10 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>none</DebugType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\AdvancedSID.ico" LogicalName="AdvancedSID.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\AdvancedSID.Core\AdvancedSID.Core.csproj" />
