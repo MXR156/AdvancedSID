@@ -409,6 +409,20 @@ internal sealed class MainForm : Form
         progressBar.Style = ProgressBarStyle.Marquee;
         UseWaitCursor = busy;
         btnCancel.UseWaitCursor = false;
+
+        if (!busy)
+        {
+            // DataGridView remembers whatever cursor was showing when the mouse last crossed a
+            // column edge, so if that happened during the scan it keeps the wait cursor forever.
+            // Reset the grids explicitly once we're done.
+            foreach (var grid in new[] { usersGrid, filesGrid })
+            {
+                grid.UseWaitCursor = false;
+                grid.Cursor = Cursors.Default;
+            }
+
+            Cursor.Current = Cursors.Default;
+        }
     }
 
     private async Task RescanUserAsync(UserRecord user)
