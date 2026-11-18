@@ -102,6 +102,36 @@ public sealed class ProfileScanner
         return container;
     }
 
+    /// <summary>
+    /// Re-reads one user's folders from disk. Folders are matched on the exact SID (or on the
+    /// known folder paths for users without one), so other users are never included.
+    /// </summary>
+    public static UserRecord RescanUser(UserRecord user, IReadOnlyList<StorageLocation> locations)
+    {
+        var folders = new List<ProfileContainer>();
+        foreach (var location in locations)
+        {
+            List<string> dirs;
+            try
+            {
+                dirs = user.Sid is not null
+                    ? Directory.EnumerateDirectories(location.Path, "*" + user.Sid + "*").ToList()
+                    : user.ContainersIn(location).Select(c => c.FolderPath).Where(Directory.Exists).ToList();
+            }
+            catch
+            {
+                dirs = new List<string>();
+            }
+
+            folders.AddRange(dirs.Select(d => ScanFolder(location, d)));
+        }
+
+        var fresh = GroupByUser(folders).FirstOrDefault(u => string.Equals(u.Key, user.Key, StringComparison.OrdinalIgnoreCase))
+            ?? new UserRecord { Key = user.Key, Sid = user.Sid, UserName = user.UserName };
+        fresh.Directory = user.Directory;
+        return fresh;
+    }
+
     public static ProfileFileKind Classify(string fileName)
     {
         if (fileName.EndsWith(".lock", StringComparison.OrdinalIgnoreCase))

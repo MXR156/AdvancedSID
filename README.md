@@ -23,7 +23,8 @@ see straight away:
 - **which** of their containers are locked, and **which session host** holds each lock,
 - **which** users have a lock **mismatch**, a common cause of logon failures.
 
-It is read-only: it never changes, moves or deletes anything on your shares.
+It only ever deletes one thing: the `.lock` files of the user you choose, when you ask it to
+and confirm. It never changes, moves or deletes profile disks or anything else on your shares.
 
 ## Features
 
@@ -40,6 +41,19 @@ It is read-only: it never changes, moves or deletes anything on your shares.
   different servers, the user is flagged **LOCK MISMATCH** in orange. The container that
   should be locked shows `NOT LOCKED (mismatch)`.
 
+**Clear stuck locks**
+- Right-click a user and choose **Remove all lock files for ...**, or right-click a single
+  lock (in the grid or the files pane) and choose **Remove this lock file...**.
+- Before anything is deleted, AdvancedSID:
+  - re-reads that user's folders, so it works on what is on disk now,
+  - asks each session host named in the locks whether the user is still logged on, and
+    **refuses** if they have an active or disconnected session there,
+  - shows you exactly which files will be removed, and the session check results, for confirmation.
+- Only `.lock` files directly inside the selected user's own profile folders can be removed.
+  VHDX and `.meta` files, and other users' files, are never touched.
+- If a lock changes between the check and the deletion (for example, the user has just logged on), it is left alone.
+- Every removal is recorded in `%APPDATA%\AdvancedSID\lock-removal.log`, with the time, who removed it, the user, the file and the server.
+
 **User lookup**
 - Each SID is resolved to the Active Directory account, with display name, email,
   enabled/disabled status and approximate last logon.
@@ -54,7 +68,8 @@ It is read-only: it never changes, moves or deletes anything on your shares.
 - Open the user's folder in Explorer. Double-click a cell does the same.
 - Open a lock file in Notepad, or show it in Explorer.
 - Copy the user name, SID, AD account, server name or folder paths.
-- Rescan just that user, for example after a lock has been cleared.
+- Remove the user's lock files (see above).
+- Rescan just that user.
 
 **Finding things**
 - Search by user name, display name, SID or **server name**. Type a host name to see every
@@ -100,7 +115,9 @@ The **Status** column summarises each user: `OK`, `Locked`, `LOCK MISMATCH`, `Or
 ## Requirements
 
 - 64-bit Windows 10 / 11 or Windows Server 2016 or later.
-- Read access to the profile shares.
+- Read access to the profile shares (and delete permission on them to remove locks).
+- To check sessions before removing a lock: permission to query sessions on the session hosts
+  (the same access `quser /server:HOST` needs, normally admin on the host).
 - For user details: a domain-joined machine. Without a domain, profiles and locks are still
   shown, but names can't be looked up.
 
@@ -112,12 +129,11 @@ The **Status** column summarises each user: `OK`, `Locked`, `LOCK MISMATCH`, `Or
 - **"(unreadable)" as the lock server:** the session host has the lock file open
   exclusively. The container is still shown as locked.
 - **Everyone shows as Orphaned on a test PC:** the PC isn't in the same domain as the SIDs.
+- **"Could not check" when removing a lock:** the session host is offline, or you don't have
+  rights to query its sessions. You can still go ahead, but only if you're sure the user is logged off.
+- **A lock won't delete ("in use"):** the session host still has it open, so the user is most
+  likely still connected there.
 - Your locations are saved in `%APPDATA%\AdvancedSID\settings.json`.
-
-## Roadmap
-
-- **Clear stuck locks** from within the app. A lock will only be removed when the user is no
-  longer logged on to the server named in it.
 
 Suggestions and bug reports are welcome. Please [open an issue](https://github.com/MXR156/AdvancedSID/issues).
 

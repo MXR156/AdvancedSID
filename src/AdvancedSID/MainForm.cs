@@ -55,6 +55,10 @@ internal sealed class MainForm : Form
     private ScanResult? result;
     private CancellationTokenSource? scanCts;
     private int menuColumn = -1;
+    private bool removingLocks;
+
+    private static string LockRemovalLogPath =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdvancedSID", "lock-removal.log");
 
     public MainForm()
     {
@@ -437,39 +441,169 @@ internal sealed class MainForm : Form
         statusLabel.Text = $"Rescanning {user.UserName}...";
         var updated = await Task.Run(() =>
         {
-            var folders = new List<ProfileContainer>();
-            foreach (var location in locations)
+            var fresh = ProfileScanner.RescanUser(user, locations);
+            if (lookup && user.Sid is not null)
             {
-                IEnumerable<string> dirs;
-                try
-                {
-                    // Pick up folders by SID (catches newly created ones), else re-read the known ones.
-                    dirs = user.Sid is not null
-                        ? Directory.EnumerateDirectories(location.Path, "*" + user.Sid + "*").ToList()
-                        : user.ContainersIn(location).Select(c => c.FolderPath).Where(Directory.Exists).ToList();
-                }
-                catch
-                {
-                    dirs = Array.Empty<string>();
-                }
-
-                folders.AddRange(dirs.Select(d => ProfileScanner.ScanFolder(location, d)));
+                fresh.Directory = directory.Lookup(user.Sid);
             }
 
-            var regrouped = ProfileScanner.GroupByUser(folders).FirstOrDefault(u => u.Key == user.Key)
-                ?? new UserRecord { Key = user.Key, Sid = user.Sid, UserName = user.UserName };
-            regrouped.Directory = lookup && user.Sid is not null ? directory.Lookup(user.Sid) : user.Directory;
-            return regrouped;
+            return fresh;
         });
 
-        var index = result.Users.IndexOf(user);
+        ReplaceUser(user, updated);
+        statusLabel.Text = $"Rescanned {user.UserName} at {DateTime.Now:HH:mm:ss}.";
+    }
+
+    /// <summary>Swaps in a freshly scanned copy of one user and redraws, keeping them selected.</summary>
+    private void ReplaceUser(UserRecord old, UserRecord updated)
+    {
+        if (result is null)
+        {
+            return;
+        }
+
+        var index = result.Users.FindIndex(u => string.Equals(u.Key, old.Key, StringComparison.OrdinalIgnoreCase));
         if (index >= 0)
         {
             result.Users[index] = updated;
         }
 
         PopulateUsers(updated.Key);
-        statusLabel.Text = $"Rescanned {user.UserName} at {DateTime.Now:HH:mm:ss}.";
+    }
+
+    /// <summary>
+    /// Removes .lock files for ONE user: all of them, or just <paramref name="onlyPaths"/>.
+    /// Re-reads the user's folders first, refuses if the user is logged on to a lock's server,
+    /// asks for confirmation, then deletes and logs. Never touches other files or other users.
+    /// </summary>
+    private async Task RemoveLocksAsync(UserRecord user, IReadOnlyCollection<string>? onlyPaths)
+    {
+        if (result is null || removingLocks || scanCts is not null)
+        {
+            return;
+        }
+
+        var locations = result.Locations;
+        removingLocks = true;
+        btnScan.Enabled = false;
+        progressBar.Style = ProgressBarStyle.Marquee;
+        progressBar.Visible = true;
+        try
+        {
+            statusLabel.Text = $"Checking {user.UserName}'s lock files and sessions...";
+            var (fresh, targets, checks) = await Task.Run(() =>
+            {
+                var current = ProfileScanner.RescanUser(user, locations);
+                var found = LockRemoval.FindTargets(current, onlyPaths);
+                var serverChecks = found.Count == 0
+                    ? (IReadOnlyList<ServerCheck>)Array.Empty<ServerCheck>()
+                    : LockRemoval.CheckServers(found, current, RemoteSessions.Query);
+                return (current, found, serverChecks);
+            });
+            ReplaceUser(user, fresh);
+
+            if (targets.Count == 0)
+            {
+                statusLabel.Text = "No lock files to remove.";
+                MessageBox.Show(this, $"No lock files were found for {fresh.UserName}. They may already have been cleared.", "Remove lock files", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var loggedOn = checks.Where(c => c.Status == ServerCheckStatus.LoggedOn).ToList();
+            if (loggedOn.Count > 0)
+            {
+                statusLabel.Text = $"{fresh.UserName} is still logged on - no locks removed.";
+                MessageBox.Show(
+                    this,
+                    $"{fresh.UserName} is still logged on, so no lock files were removed:\n\n"
+                    + string.Join("\n", loggedOn.Select(c => $"   {c.Server}:  {c.Detail}"))
+                    + "\n\nLog the user off (or end the disconnected session) first.",
+                    "Remove lock files",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Stop);
+                return;
+            }
+
+            var unverified = checks.Where(c => c.Status is ServerCheckStatus.CouldNotCheck or ServerCheckStatus.NoServerName).ToList();
+            var text = new StringBuilder();
+            text.AppendLine($"Remove {(targets.Count == 1 ? "this lock file" : $"these {targets.Count} lock files")} for {fresh.UserName}"
+                + (fresh.Directory.DisplayName is { } dn ? $" ({dn})" : string.Empty) + "?");
+            text.AppendLine();
+            foreach (var t in targets)
+            {
+                text.AppendLine($"   {t.Container.Location.Name}:  {t.File.Name}");
+                text.AppendLine($"        locked by {t.File.Lock?.Server ?? "(unknown)"}, {Format.Age(t.File.LastWriteTime)}");
+            }
+
+            text.AppendLine();
+            text.AppendLine("Session check:");
+            foreach (var c in checks)
+            {
+                text.AppendLine(c.Status switch
+                {
+                    ServerCheckStatus.NotLoggedOn => $"   OK   {c.Server}: user is not logged on",
+                    ServerCheckStatus.CouldNotCheck => $"   ??   {c.Server}: could not check ({c.Detail})",
+                    _ => "   ??   " + c.Detail,
+                });
+            }
+
+            if (unverified.Count > 0)
+            {
+                text.AppendLine();
+                text.AppendLine("WARNING: the user's sessions could not be checked on every server.");
+                text.AppendLine("Only continue if you are sure the user is logged off everywhere.");
+            }
+
+            text.AppendLine();
+            text.Append("Only the .lock files listed above will be deleted. The profile disks are not touched.");
+
+            if (MessageBox.Show(this, text.ToString(), "Remove lock files", MessageBoxButtons.YesNo, unverified.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            {
+                statusLabel.Text = "Lock removal cancelled.";
+                return;
+            }
+
+            statusLabel.Text = $"Removing lock files for {fresh.UserName}...";
+            var outcomes = await Task.Run(() => LockRemoval.Remove(targets, fresh, locations));
+            string? logError = null;
+            try
+            {
+                LockRemoval.AppendLog(LockRemovalLogPath, fresh, outcomes, checks);
+            }
+            catch (Exception ex)
+            {
+                logError = ex.Message;
+            }
+
+            var after = await Task.Run(() => ProfileScanner.RescanUser(fresh, locations));
+            ReplaceUser(fresh, after);
+
+            var deleted = outcomes.Count(o => o.Deleted);
+            var failed = outcomes.Where(o => !o.Deleted).ToList();
+            statusLabel.Text = $"Removed {deleted} of {outcomes.Count} lock file(s) for {fresh.UserName} at {DateTime.Now:HH:mm:ss}.";
+            if (failed.Count > 0 || logError is not null)
+            {
+                MessageBox.Show(
+                    this,
+                    $"Removed {deleted} of {outcomes.Count} lock file(s)."
+                    + (failed.Count > 0 ? "\n\nNot removed:\n" + string.Join("\n", failed.Select(o => $"   {o.Target.File.Name}: {o.Error}")) : string.Empty)
+                    + (logError is not null ? "\n\nCould not write the log: " + logError : string.Empty),
+                    "Remove lock files",
+                    MessageBoxButtons.OK,
+                    failed.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            statusLabel.Text = "Lock removal failed: " + ex.Message;
+            MessageBox.Show(this, ex.Message, "Remove lock files", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            removingLocks = false;
+            btnScan.Enabled = scanCts is null;
+            progressBar.Visible = scanCts is not null;
+        }
     }
 
     // ------------------------------------------------------------------ users grid
@@ -841,6 +975,8 @@ internal sealed class MainForm : Form
                     {
                         usersMenu.Items.Add(new ToolStripMenuItem($"Copy server name ({s})", null, (_, _) => Shell.Copy(s)));
                     }
+
+                    usersMenu.Items.Add(new ToolStripMenuItem($"Remove this lock file ({lockFile.Name})...", null, async (_, _) => await RemoveLocksAsync(user, new[] { lockFile.FullPath })) { Enabled = !removingLocks });
                 }
             }
 
@@ -903,6 +1039,16 @@ internal sealed class MainForm : Form
         usersMenu.Items.Add(copy);
         usersMenu.Items.Add(new ToolStripSeparator());
         usersMenu.Items.Add(new ToolStripMenuItem("Rescan this user", null, async (_, _) => await RescanUserAsync(user)));
+        if (user.IsLocked)
+        {
+            var count = user.Containers.Sum(c => c.Locks.Count());
+            usersMenu.Items.Add(new ToolStripMenuItem($"Remove all lock files for {user.UserName} ({count})...", null, async (_, _) => await RemoveLocksAsync(user, null)) { Enabled = !removingLocks });
+        }
+
+        if (File.Exists(LockRemovalLogPath))
+        {
+            usersMenu.Items.Add(new ToolStripMenuItem("Open lock removal log", null, (_, _) => Shell.OpenInNotepad(LockRemovalLogPath)));
+        }
     }
 
     // ------------------------------------------------------------------ files grid
@@ -1014,6 +1160,13 @@ internal sealed class MainForm : Form
             if (f.Lock?.Server is { } server)
             {
                 filesMenu.Items.Add(new ToolStripMenuItem($"Copy server name ({server})", null, (_, _) => Shell.Copy(server)));
+            }
+
+            if (f.Kind == ProfileFileKind.Lock && usersGrid.CurrentRow?.Tag is UserRecord owner)
+            {
+                filesMenu.Items.Add(new ToolStripSeparator());
+                filesMenu.Items.Add(new ToolStripMenuItem("Remove this lock file...", null, async (_, _) => await RemoveLocksAsync(owner, new[] { f.FullPath })) { Enabled = !removingLocks });
+                filesMenu.Items.Add(new ToolStripMenuItem($"Remove all lock files for {owner.UserName}...", null, async (_, _) => await RemoveLocksAsync(owner, null)) { Enabled = !removingLocks });
             }
         }
 
