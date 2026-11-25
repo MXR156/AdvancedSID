@@ -37,6 +37,17 @@ public class OldProfileTests
     [InlineData("Harold", false)]
     [InlineData("Jane.Oldfield", false)]
     [InlineData("old", false)]
+    [InlineData("Tom.Oldham", false)]
+    [InlineData("Oldham.Tom", false)]
+    [InlineData("Sarah.Oldfield", false)]
+    [InlineData("old.smith", false)]
+    [InlineData("Olden_Jones", false)]
+    [InlineData("Jane.Gold", false)]
+    [InlineData("Arnold.Smith", false)]
+    [InlineData("Leopold", false)]
+    [InlineData("j.oldroyd", false)]
+    [InlineData("Tom.Oldham_old", true)]
+    [InlineData("Sarah.Oldfield.old", true)]
     public void Recognises_old_folder_names(string name, bool expected) => Assert.Equal(expected, FolderNameParser.IsOldName(name));
 
     [Theory]
