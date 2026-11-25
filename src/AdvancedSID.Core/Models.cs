@@ -33,6 +33,9 @@ public enum ProfileFileKind
     Disk,
     Lock,
     Meta,
+
+    /// <summary>A VHD/VHDX renamed out of the way, e.g. "Profile_x.VHDX.old".</summary>
+    OldDisk,
     Other,
 }
 
@@ -97,6 +100,13 @@ public sealed class ProfileContainer
     public bool HasDisk => Files.Any(f => f.Kind == ProfileFileKind.Disk);
 
     public long DiskSize => Disks.Sum(d => d.Size);
+
+    /// <summary>Folder user name ends in _old / .old / -old (it may still be the user's real name - see <see cref="UserRecord.IsOld"/>).</summary>
+    public bool HasOldName => FolderNameParser.IsOldName(FolderUserName);
+
+    public bool HasOldDisk => Files.Any(f => f.Kind == ProfileFileKind.OldDisk);
+
+    public long OldDiskSize => Files.Where(f => f.Kind == ProfileFileKind.OldDisk).Sum(f => f.Size);
 
     public DateTime LastWriteTime =>
         Files.Count == 0 ? FolderLastWriteTime : Files.Max(f => f.LastWriteTime);
@@ -163,21 +173,45 @@ public sealed class UserRecord
     public IEnumerable<string> LockServers =>
         Containers.SelectMany(c => c.LockServers).Distinct(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>sAMAccountName from the AD lookup, if there was one.</summary>
+    public string? SamAccountName =>
+        Directory.AccountName is { } a ? a[(a.LastIndexOf('\\') + 1)..] : null;
+
+    /// <summary>
+    /// True for a folder renamed out of the way (e.g. "SID_Jane.Doe_old") when a profile was
+    /// recreated. Not if AD says the account really is called that (e.g. a surname "Old").
+    /// </summary>
+    public bool IsOld(ProfileContainer container) =>
+        container.HasOldName && !string.Equals(container.FolderUserName, SamAccountName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The containers in use - everything except old, renamed-out-of-the-way folders.</summary>
+    public IEnumerable<ProfileContainer> ActiveContainers => Containers.Where(c => !IsOld(c));
+
+    public IEnumerable<ProfileContainer> OldContainers => Containers.Where(IsOld);
+
+    /// <summary>Old renamed folders or renamed (.old) disk files are lying around for this user.</summary>
+    public bool HasOldProfiles => Containers.Any(c => IsOld(c) || c.HasOldDisk);
+
+    public long OldDataSize => OldContainers.Sum(c => c.DiskSize + c.OldDiskSize) + ActiveContainers.Sum(c => c.OldDiskSize);
+
     /// <summary>
     /// Containers that should be locked but are not. When a user is logged on, every one of
     /// their containers (Profile, Office, and both Cloud Cache copies) is locked. So if any
     /// container is locked, a container with a disk and no lock is a mismatch, and usually
-    /// the cause of a logon problem.
+    /// the cause of a logon problem. Old (renamed) folders are ignored.
     /// </summary>
     public IEnumerable<ProfileContainer> UnlockedWhileOthersLocked =>
-        IsLocked ? Containers.Where(c => !c.IsLocked && c.HasDisk) : Enumerable.Empty<ProfileContainer>();
+        ActiveContainers.Any(c => c.IsLocked)
+            ? ActiveContainers.Where(c => !c.IsLocked && c.HasDisk)
+            : Enumerable.Empty<ProfileContainer>();
 
     /// <summary>A description of what is wrong with this user's locks, or null if they are consistent.</summary>
     public string? LockMismatch
     {
         get
         {
-            if (!IsLocked)
+            var active = ActiveContainers.ToList();
+            if (!active.Any(c => c.IsLocked))
             {
                 return null;
             }
@@ -186,11 +220,11 @@ public sealed class UserRecord
             var unlocked = UnlockedWhileOthersLocked.ToList();
             if (unlocked.Count > 0)
             {
-                var locked = Containers.Where(c => c.IsLocked).Select(c => c.Location.Name);
+                var locked = active.Where(c => c.IsLocked).Select(c => c.Location.Name);
                 issues.Add($"Locked: {string.Join(", ", locked)} - but NOT locked: {string.Join(", ", unlocked.Select(c => c.Location.Name))}");
             }
 
-            var servers = LockServers.ToList();
+            var servers = active.SelectMany(c => c.LockServers).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (servers.Count > 1)
             {
                 issues.Add($"Locked by different servers: {string.Join(", ", servers)}");
@@ -205,7 +239,8 @@ public sealed class UserRecord
     public DateTime LastWriteTime =>
         Containers.Count == 0 ? DateTime.MinValue : Containers.Max(c => c.LastWriteTime);
 
-    public long TotalDiskSize => Containers.Sum(c => c.DiskSize);
+    /// <summary>All disk data for the user, including old folders and renamed disks.</summary>
+    public long TotalDiskSize => Containers.Sum(c => c.DiskSize + c.OldDiskSize);
 }
 
 public sealed class ScanResult

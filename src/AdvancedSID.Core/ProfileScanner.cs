@@ -139,6 +139,11 @@ public sealed class ProfileScanner
             return ProfileFileKind.Lock;
         }
 
+        if (FolderNameParser.IsOldDiskName(fileName))
+        {
+            return ProfileFileKind.OldDisk;
+        }
+
         if (fileName.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
         {
             return ProfileFileKind.Meta;
@@ -184,9 +189,10 @@ public sealed class ProfileScanner
             .Select(g =>
             {
                 var list = g.OrderBy(c => c.Location.Key, StringComparer.Ordinal).ToList();
-                var name = list
-                    .Select(c => c.FolderUserName)
-                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                // Prefer the current name over an old renamed one ("Jane.Doe" over "Jane.Doe_old").
+                var names = list.Select(c => c.FolderUserName).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+                var current = names.Where(n => !FolderNameParser.IsOldName(n)).ToList();
+                var name = (current.Count > 0 ? current : names)
                     .GroupBy(n => n, StringComparer.OrdinalIgnoreCase)
                     .OrderByDescending(n => n.Count())
                     .Select(n => n.Key)

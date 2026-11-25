@@ -16,6 +16,9 @@ internal sealed class MainForm : Form
     private static readonly Color MismatchBack = Color.FromArgb(255, 160, 60);
     private static readonly Color MismatchSelectedBack = Color.FromArgb(205, 95, 0);
     private static readonly Color MismatchFore = Color.Black;
+    private static readonly Color OldBack = Color.FromArgb(232, 226, 250);
+    private static readonly Color OldSelectedBack = Color.FromArgb(110, 90, 170);
+    private static readonly Color OldFore = Color.FromArgb(75, 55, 140);
     private static readonly Font BoldFont = new(Control.DefaultFont, FontStyle.Bold);
 
     private readonly AppSettings settings = AppSettings.Load();
@@ -34,6 +37,7 @@ internal sealed class MainForm : Form
     private readonly CheckBox chkLockedOnly = new() { Text = "Locked only", AutoSize = true };
     private readonly CheckBox chkProblemsOnly = new() { Text = "Orphaned / disabled only", AutoSize = true };
     private readonly CheckBox chkMismatchOnly = new() { Text = "Lock mismatches only", AutoSize = true };
+    private readonly CheckBox chkOldOnly = new() { Text = "Old profiles only", AutoSize = true };
     private readonly CheckBox chkLockFilesOnly = new() { Text = "Show lock files only", AutoSize = true };
 
     // Results
@@ -118,9 +122,10 @@ internal sealed class MainForm : Form
         chkLockedOnly.Margin = new Padding(12, 6, 3, 3);
         chkProblemsOnly.Margin = new Padding(6, 6, 3, 3);
         chkMismatchOnly.Margin = new Padding(6, 6, 3, 3);
+        chkOldOnly.Margin = new Padding(6, 6, 3, 3);
         txtFilter.Margin = new Padding(3, 5, 3, 3);
         btnLocations.Margin = new Padding(3, 3, 12, 3);
-        toolbar.Controls.AddRange(new Control[] { btnLocations, btnScan, btnCancel, btnExport, filterLabel, txtFilter, chkLockedOnly, chkMismatchOnly, chkProblemsOnly });
+        toolbar.Controls.AddRange(new Control[] { btnLocations, btnScan, btnCancel, btnExport, filterLabel, txtFilter, chkLockedOnly, chkMismatchOnly, chkOldOnly, chkProblemsOnly });
 
         // --- grids
         var filesHeader = new Panel { Dock = DockStyle.Top, Height = LogicalToDeviceUnits(26), BackColor = SystemColors.ControlLight };
@@ -244,6 +249,7 @@ internal sealed class MainForm : Form
         chkLockedOnly.CheckedChanged += (_, _) => PopulateUsers();
         chkProblemsOnly.CheckedChanged += (_, _) => PopulateUsers();
         chkMismatchOnly.CheckedChanged += (_, _) => PopulateUsers();
+        chkOldOnly.CheckedChanged += (_, _) => PopulateUsers();
         chkLockFilesOnly.CheckedChanged += (_, _) => PopulateFiles();
         warningsLabel.Click += (_, _) => ShowWarnings();
 
@@ -645,6 +651,7 @@ internal sealed class MainForm : Form
         return result.Users.Where(u =>
             (!chkLockedOnly.Checked || u.IsLocked)
             && (!chkMismatchOnly.Checked || u.HasLockMismatch)
+            && (!chkOldOnly.Checked || u.HasOldProfiles)
             && (!chkProblemsOnly.Checked || u.IsOrphaned || u.IsDisabled)
             && (filter.Length == 0 || Matches(u, filter)));
     }
@@ -724,6 +731,11 @@ internal sealed class MainForm : Form
             flags.Add("Disabled");
         }
 
+        if (user.HasOldProfiles)
+        {
+            flags.Add("Old profile");
+        }
+
         var statusCell = cells[usersGrid.Columns["Status"]!.Index];
         statusCell.Value = flags.Count == 0 ? "OK" : string.Join(", ", flags);
         if (user.HasLockMismatch)
@@ -741,9 +753,18 @@ internal sealed class MainForm : Form
         {
             StyleCell(statusCell, WarnBack, WarnSelectedBack, Color.FromArgb(120, 70, 0), bold: true);
         }
+        else if (user.HasOldProfiles)
+        {
+            StyleCell(statusCell, OldBack, OldSelectedBack, OldFore, bold: true);
+        }
         else
         {
             statusCell.Style.ForeColor = OkFore;
+        }
+
+        if (user.HasOldProfiles)
+        {
+            statusCell.ToolTipText = (string.IsNullOrEmpty(statusCell.ToolTipText) ? string.Empty : statusCell.ToolTipText + "\n\n") + OldSummary(user);
         }
 
         cells[usersGrid.Columns["User"]!.Index].Value = user.UserName;
@@ -773,10 +794,32 @@ internal sealed class MainForm : Form
         cells[usersGrid.Columns["Sid"]!.Index].Value = user.Sid ?? "(no SID in folder name)";
     }
 
+    private static string OldSummary(UserRecord user)
+    {
+        var lines = new List<string> { "Old profiles (ignored by the lock mismatch check):" };
+        foreach (var c in user.OldContainers)
+        {
+            lines.Add($"   {c.Location.Name}:  {c.FolderName}   {Format.Size(c.DiskSize + c.OldDiskSize)}, last modified {Format.Time(c.LastWriteTime)}");
+        }
+
+        foreach (var c in user.ActiveContainers.Where(c => c.HasOldDisk))
+        {
+            foreach (var f in c.Files.Where(f => f.Kind == ProfileFileKind.OldDisk))
+            {
+                lines.Add($"   {c.Location.Name}:  {f.Name}   {Format.Size(f.Size)}, last modified {Format.Time(f.LastWriteTime)}");
+            }
+        }
+
+        lines.Add($"Total: {Format.Size(user.OldDataSize)}");
+        return string.Join("\n", lines);
+    }
+
     private static void FillLocationCell(DataGridViewCell cell, UserRecord user, StorageLocation location)
     {
-        var containers = user.ContainersIn(location).ToList();
-        if (containers.Count == 0)
+        var all = user.ContainersIn(location).ToList();
+        var containers = all.Where(c => !user.IsOld(c)).ToList();
+        var old = all.Where(user.IsOld).ToList();
+        if (all.Count == 0)
         {
             cell.Value = "-";
             cell.Style.ForeColor = MutedFore;
@@ -786,9 +829,9 @@ internal sealed class MainForm : Form
         }
 
         var tip = new StringBuilder();
-        foreach (var c in containers)
+        foreach (var c in all)
         {
-            tip.AppendLine(c.FolderPath);
+            tip.AppendLine((user.IsOld(c) ? "[OLD]  " : string.Empty) + c.FolderPath);
             if (c.ScanError is not null)
             {
                 tip.AppendLine("  ERROR: " + c.ScanError);
@@ -812,6 +855,23 @@ internal sealed class MainForm : Form
         }
 
         cell.ToolTipText = tip.ToString().TrimEnd() + "\n\nDouble-click to open folder - right-click for more.";
+
+        if (containers.Count == 0)
+        {
+            // Only an old, renamed-out-of-the-way folder here.
+            if (old.Any(c => c.IsLocked))
+            {
+                cell.Value = "LOCKED (old)  " + string.Join(", ", old.SelectMany(c => c.LockServers).Distinct(StringComparer.OrdinalIgnoreCase));
+                StyleCell(cell, LockedBack, LockedSelectedBack, LockedFore, bold: true);
+            }
+            else
+            {
+                cell.Value = "OLD  " + Format.Size(old.Sum(c => c.DiskSize + c.OldDiskSize));
+                StyleCell(cell, OldBack, OldSelectedBack, OldFore, bold: false);
+            }
+
+            return;
+        }
 
         if (containers.Any(c => c.IsLocked))
         {
@@ -840,6 +900,12 @@ internal sealed class MainForm : Form
         if (containers.Count > 1)
         {
             cell.Value += $"  ({containers.Count} folders)";
+        }
+
+        if (old.Count > 0 || containers.Any(c => c.HasOldDisk))
+        {
+            cell.Value += "  + old";
+            cell.ToolTipText = "This location also has old (renamed) profile data - it's ignored by the lock mismatch check.\n\n" + cell.ToolTipText;
         }
     }
 
@@ -920,6 +986,7 @@ internal sealed class MainForm : Form
         var lockFiles = users.Sum(u => u.Containers.Sum(c => c.Locks.Count()));
         var orphaned = users.Count(u => u.IsOrphaned);
         var disabled = users.Count(u => u.IsDisabled);
+        var withOld = users.Count(u => u.HasOldProfiles);
         var servers = users
             .SelectMany(u => u.Containers.SelectMany(c => c.LockServers))
             .GroupBy(s => s, StringComparer.OrdinalIgnoreCase)
@@ -927,7 +994,7 @@ internal sealed class MainForm : Form
             .Select(g => $"{g.Key} ({g.Count()})")
             .ToList();
 
-        countsLabel.Text = $"{shown} of {users.Count} users  |  {locked} locked ({lockFiles} lock files)  |  {mismatched} lock mismatches  |  {orphaned} orphaned  |  {disabled} disabled";
+        countsLabel.Text = $"{shown} of {users.Count} users  |  {locked} locked ({lockFiles} lock files)  |  {mismatched} lock mismatches  |  {orphaned} orphaned  |  {disabled} disabled  |  {withOld} with old profiles";
         countsLabel.ForeColor = mismatched > 0 ? MismatchSelectedBack : SystemColors.ControlText;
         countsLabel.ToolTipText = servers.Count == 0 ? "No locks." : "Locks per server:\n" + string.Join("\n", servers);
     }
@@ -1068,28 +1135,29 @@ internal sealed class MainForm : Form
         foreach (var c in user.Containers)
         {
             var isMismatch = mismatched.Contains(c);
+            var isOld = user.IsOld(c);
             if (c.Files.Count == 0)
             {
-                AddFileRow(c, null, null, false);
+                AddFileRow(c, null, null, false, isOld);
             }
-            else if (locksOnly && !c.IsLocked)
+            else if (locksOnly && !c.IsLocked && !isOld)
             {
                 // Keep a row per container so a missing lock is obvious.
-                AddFileRow(c, null, isMismatch ? "(NO LOCK FILE - but other containers are locked)" : "(no lock file)", isMismatch);
+                AddFileRow(c, null, isMismatch ? "(NO LOCK FILE - but other containers are locked)" : "(no lock file)", isMismatch, false);
             }
 
             foreach (var f in c.Files.Where(f => !locksOnly || f.Kind == ProfileFileKind.Lock))
             {
-                AddFileRow(c, f, null, isMismatch && f.Kind == ProfileFileKind.Disk);
+                AddFileRow(c, f, null, isMismatch && f.Kind == ProfileFileKind.Disk, isOld || f.Kind == ProfileFileKind.OldDisk);
             }
         }
     }
 
-    private void AddFileRow(ProfileContainer c, ProfileFile? f, string? note, bool mismatch)
+    private void AddFileRow(ProfileContainer c, ProfileFile? f, string? note, bool mismatch, bool old)
     {
         var index = filesGrid.Rows.Add(
-            c.Location.Name,
-            f?.Kind.ToString() ?? string.Empty,
+            c.Location.Name + (old && f?.Kind != ProfileFileKind.OldDisk ? " (old)" : string.Empty),
+            f is null ? string.Empty : f.Kind == ProfileFileKind.OldDisk ? "Old disk" : f.Kind.ToString(),
             f?.Name ?? note ?? (c.ScanError is not null ? "(could not read folder: " + c.ScanError + ")" : "(folder is empty)"),
             f?.Size ?? 0L,
             f is null ? string.Empty : Format.Time(f.LastWriteTime),
@@ -1121,6 +1189,14 @@ internal sealed class MainForm : Form
             lockedBy.ToolTipText = f.Lock is { Candidates.Count: > 1 } ld
                 ? "Other names found in file:\n" + string.Join("\n", ld.Candidates.Skip(1).Take(10))
                 : "Right-click to open the lock file in Notepad.";
+        }
+        else if (old)
+        {
+            foreach (DataGridViewCell cell in row.Cells)
+            {
+                StyleCell(cell, OldBack, OldSelectedBack, OldFore, bold: false);
+                cell.ToolTipText = "Old (renamed) profile data - ignored by the lock mismatch check.";
+            }
         }
         else if (f is null)
         {

@@ -83,5 +83,20 @@ foreach ($loc in $locations.Keys) {
 # A folder with no disk at all, to show the "No disk" state.
 New-Item -ItemType Directory -Path (Join-Path $Root 'Profiles1\S-1-5-21-1111111111-2222222222-3333333333-448300_Empty.User') -Force | Out-Null
 
+# Old profiles: Jane.Doe's profile was recreated, so the previous folders were renamed to
+# "_old" / ".old" (shown as old, not as a lock mismatch). John.Smith has a renamed disk file.
+$janeSid = 'S-1-5-21-1111111111-2222222222-3333333333-448107'
+foreach ($old in @("Profiles1\$($janeSid)_Jane.Doe_old|Profile", "Office1\$($janeSid)_Jane.Doe.old|ODFC")) {
+    $dir, $prefix = $old -split '\|'
+    $dir = (New-Item -ItemType Directory -Path (Join-Path $Root $dir) -Force).FullName
+    $fs = [System.IO.File]::Create((Join-Path $dir "$($prefix)_Jane.Doe.VHDX"))
+    $fs.SetLength(120MB)
+    $fs.Close()
+}
+$johnDir = Join-Path $Root 'Profiles1\S-1-5-21-1111111111-2222222222-3333333333-448201_John.Smith'
+$fs = [System.IO.File]::Create((Join-Path $johnDir 'Profile_John.Smith.VHDX.old'))
+$fs.SetLength(80MB)
+$fs.Close()
+
 Write-Host "Test data created under $Root" -ForegroundColor Green
 $locations.Keys | ForEach-Object { Write-Host "  $(Join-Path $Root $_)" }

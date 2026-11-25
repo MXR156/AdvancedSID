@@ -32,6 +32,20 @@ public static partial class FolderNameParser
         return (match.Value.ToUpperInvariant(), rest);
     }
 
+    // "_old", ".old", "-old", optionally numbered or dated: "_old2", "_old_20251125", ".old.1".
+    [GeneratedRegex(@"[._\-]old(?:[._\-]?\d+)*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex OldSuffixRegex();
+
+    // A renamed disk: "Profile_x.VHDX.old", "ODFC_x.vhdx_old2".
+    [GeneratedRegex(@"\.vhdx?[._\-]old(?:[._\-]?\d+)*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex OldDiskRegex();
+
+    /// <summary>True for a user name that has been renamed out of the way, e.g. "Jane.Doe_old".</summary>
+    public static bool IsOldName(string name) => OldSuffixRegex().IsMatch(name);
+
+    /// <summary>True for a VHD/VHDX file that has been renamed out of the way, e.g. "Profile_x.VHDX.old".</summary>
+    public static bool IsOldDiskName(string fileName) => OldDiskRegex().IsMatch(fileName);
+
     public static string? FindSid(string text)
     {
         var match = SidRegex().Match(text);

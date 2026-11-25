@@ -54,6 +54,17 @@ and confirm. It never changes, moves or deletes profile disks or anything else o
 - If a lock changes between the check and the deletion (for example, the user has just logged on), it is left alone.
 - Every removal is recorded in `%APPDATA%\AdvancedSID\lock-removal.log`, with the time, who removed it, the user, the file and the server.
 
+**Old profiles**
+- When a profile is recreated, the old folder is often renamed to `..._old` or `....old` (also
+  `-old`, `_old2`, `_old_20251125` and so on). These are shown as **Old profile** in lavender,
+  so they're easy to find for auditing and clean-up, but they are **not** counted in the lock
+  mismatch check.
+- Renamed disk files such as `Profile_user.VHDX.old` are flagged the same way.
+- The *Old profiles only* filter lists every user with old data; hover over the Status cell
+  for the folders, sizes and dates.
+- If AD shows the account is really named that way (for example, a surname "Old"), the folder
+  is treated as a normal profile.
+
 **User lookup**
 - Each SID is resolved to the Active Directory account, with display name, email,
   enabled/disabled status and approximate last logon.
@@ -74,7 +85,7 @@ and confirm. It never changes, moves or deletes profile disks or anything else o
 **Finding things**
 - Search by user name, display name, SID or **server name**. Type a host name to see every
   profile that host has locked.
-- Filters: *Locked only*, *Lock mismatches only*, *Orphaned / disabled only*.
+- Filters: *Locked only*, *Lock mismatches only*, *Old profiles only*, *Orphaned / disabled only*.
 - The files pane lists every VHDX, `.lock` and `.meta` file for the selected user. Tick
   *Show lock files only* to see just the locks.
 - The status bar shows totals; hover over it for a count of locks per session host.
@@ -108,9 +119,11 @@ and confirm. It never changes, moves or deletes profile disks or anything else o
 | `LOCKED  HOST` (red)         | Container locked by that session host                                     |
 | `NOT LOCKED (mismatch)` (orange) | User's other containers are locked but this one isn't, so investigate     |
 | `No disk` (amber)            | The user's folder exists but has no VHD/VHDX in it                        |
+| `OLD  2.1 GB` (lavender)     | Only an old, renamed (`_old` / `.old`) folder in this location            |
+| `... + old`                  | The location also has old profile data alongside the current one          |
 | `-` (grey)                   | The user has no folder in this location                                   |
 
-The **Status** column summarises each user: `OK`, `Locked`, `LOCK MISMATCH`, `Orphaned` or `Disabled`.
+The **Status** column summarises each user: `OK`, `Locked`, `LOCK MISMATCH`, `Orphaned`, `Disabled` and/or `Old profile`.
 
 ## Requirements
 

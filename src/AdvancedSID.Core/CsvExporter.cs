@@ -11,7 +11,7 @@ public static class CsvExporter
         sb.AppendLine(string.Join(",", new[]
         {
             "UserName", "DisplayName", "Account", "AccountStatus", "SID", "Location", "ContainerType",
-            "Folder", "Disks", "DiskSizeGB", "LastModified", "Locked", "LockServers", "LockFiles", "LockMismatch",
+            "Folder", "Disks", "DiskSizeGB", "LastModified", "Locked", "LockServers", "LockFiles", "LockMismatch", "Old",
         }.Select(Escape)));
 
         foreach (var user in users)
@@ -35,6 +35,7 @@ public static class CsvExporter
                     string.Join("; ", c.Locks.Select(l => l.Lock?.Server ?? "(unknown)")),
                     string.Join("; ", c.Locks.Select(l => l.Name)),
                     user.LockMismatch ?? string.Empty,
+                    user.IsOld(c) ? "Old folder" : c.HasOldDisk ? "Old disk file" : string.Empty,
                 }.Select(Escape)));
             }
         }
